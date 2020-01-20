@@ -73,22 +73,22 @@ fn read_dir_sorted(dir: &str) -> Result<Vec<String>,ProcessingError> {
 
 fn run_tests() -> Result<(),ProcessingError> {
     let mut failures = vec![];
-    for filename in &read_dir_sorted("test/good")? {
+    for filename in &read_dir_sorted("test/kernel_good")? {
         match process(filename) {
-            Ok(()) => println!("{:40} PASS", filename),
+            Ok(()) => println!("{:48} PASS", filename),
             Err(e) => {
-                println!("{:40} !!!! {:?}", filename, e);
+                println!("{:48} !!!! {:?}", filename, e);
                 failures.push(filename.to_string());
             }
         }
     }
-    for filename in &read_dir_sorted("test/bad")? {
+    for filename in &read_dir_sorted("test/kernel_bad")? {
         match process(filename) {
             Ok(()) => {
-                println!("{:40} !!!!", filename);
+                println!("{:48} !!!!", filename);
                 failures.push(filename.to_string());
             }
-            Err(_) => println!("{:40} FAIL as expected", filename)
+            Err(_) => println!("{:48} FAIL as expected", filename)
         }
     }
 
