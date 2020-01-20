@@ -1,0 +1,9 @@
+lemma bad_step_id : forall x, x = 0 {
+    given x {
+        given x = 0 {
+	    x = 0 by renaming 1;
+	}
+        x = 0 by renaming 2;
+    }
+    forall x, x = 0 by all_intro 5;
+}

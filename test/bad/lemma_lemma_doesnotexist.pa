@@ -1,0 +1,12 @@
+lemma zero_not_x_plus_one : forall x, ~(0 = x + S(0)) {
+    forall x, ~(0 = S(x)) by zero_is_not_succ;
+    forall x, x + S(0) = S(x) by lemma x_plus_one_is_succ_x;
+    given x {
+        ~(0 = S(x)) by all_elim 0;
+	x + S(0) = S(x) by all_elim 1;
+	x + S(0) = x + S(0) by eq_intro;
+	S(x) = x + S(0) by eq_elim 4 5;
+	~(0 = x + S(0)) by eq_elim 6 3;
+    }
+    forall x, ~(0 = x + S(0)) by all_intro 8;
+}

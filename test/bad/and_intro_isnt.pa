@@ -1,0 +1,5 @@
+lemma bad : 0 = 0 {
+    0 = 0 by eq_intro;
+    0 = 0 by eq_intro;
+    0 = 0 by and_intro 0 1;
+}

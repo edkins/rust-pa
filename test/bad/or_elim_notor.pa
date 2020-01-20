@@ -1,0 +1,10 @@
+lemma bad : 0 = 0 {
+    0 = 0 by eq_intro;
+    given 0 = 0 {
+        0 = 0 by renaming 1;
+    }
+    given 0 = 0 {
+        0 = 0 by eq_intro;
+    }
+    0 = 0 by or_elim 0 3 6;
+}

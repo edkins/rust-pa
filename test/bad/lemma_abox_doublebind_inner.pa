@@ -1,0 +1,10 @@
+lemma doublebind : 0 = 0 {
+    given x {
+        given y {
+            y = y by eq_intro;
+        }
+        forall y, y = y by all_intro 3;
+	forall x, x = x by renaming 4;
+    }
+    0 = 0 by eq_intro;
+}

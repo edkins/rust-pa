@@ -1,0 +1,8 @@
+def foo for a b {
+    foo(a,b) <-> a = b
+}
+
+def foo for a b {
+    foo(a,b) <-> ~(a = b)
+}
+

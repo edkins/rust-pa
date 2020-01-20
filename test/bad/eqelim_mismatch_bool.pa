@@ -1,0 +1,8 @@
+lemma invalid_step : forall x, 0 = 0 {
+    given y {
+        0 = 0 by eq_intro;
+    }
+    forall y, 0 = 0 by all_intro 2;
+    0 = 0 by eq_intro;
+    forall x, 0 = 0 by eq_elim 4 3;
+}

@@ -1,0 +1,13 @@
+def sum_to_one for a b {
+    sum_to_one(a,b) <-> b + a = S(0)
+}
+
+lemma one_and_zero_sum_to_one : sum_to_one(S(0),0) {
+    forall a, forall b, sum_to_one(a,b) <-> a + b = S(0) by def sum_to_one;
+    forall b, sum_to_one(S(0),b) <-> S(0) + b = S(0) by all_elim 0;
+    sum_to_one(S(0),0) <-> S(0) + 0 = S(0) by all_elim 1;
+    S(0) + 0 = S(0) -> sum_to_one(S(0),0) by iff_elim_r 2;
+    forall x, x + 0 = x by add_zero;
+    S(0) + 0 = S(0) by all_elim 4;
+    sum_to_one(S(0),0) by imp_elim 3 5;
+}

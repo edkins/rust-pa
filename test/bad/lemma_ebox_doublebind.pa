@@ -1,0 +1,9 @@
+lemma doublebind : 0 = 0 {
+    given x {
+        given x, x = 0 {
+            x = x by eq_intro;
+        }
+        x = x by eq_intro;
+    }
+    0 = 0 by eq_intro;
+}

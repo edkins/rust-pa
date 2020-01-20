@@ -1,0 +1,7 @@
+lemma doublebind : 0 = 0 {
+    forall x, forall y, (x + S(y) = S(x + y)) by add_succ;
+    given y {
+        forall y, (0 + S(y) = S(0 + y)) by all_elim 0;
+    }
+    0 = 0 by eq_intro;
+}

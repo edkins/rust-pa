@@ -1,0 +1,6 @@
+lemma bad : false {
+    0 = 0 by eq_intro;
+    forall x, ~(0 = S(x)) by zero_is_not_succ;
+    ~(0 = S(0)) by all_elim 1;
+    false by false_intro 0 2;
+}

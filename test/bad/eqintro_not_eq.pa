@@ -1,0 +1,3 @@
+lemma bad : ~(0 = 0) {
+    ~(0 = 0) by eq_intro;
+}

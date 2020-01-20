@@ -32,12 +32,15 @@ impl ErrorType {
         }
     }
     fn at(self, pos:Pos, text:&str) -> ProcessingError {
-        let linenum = text[..pos].lines().count();
+        let mut linenum = text[..text.len() - pos].lines().count();
         let lines:Vec<&str> = text.lines().collect();
         let line = if linenum >= lines.len() {
             "EOF".to_string()
         } else {
-            format!("{} {}", linenum, lines[linenum])
+            if linenum > 0 {
+                linenum -= 1;
+            }
+            format!("{} {}", linenum + 1, lines[linenum])
         };
         ProcessingError{line, typ:self}
     }
@@ -56,34 +59,36 @@ fn process(filename: &str) -> Result<(),ProcessingError> {
     Ok(())
 }
 
+fn read_dir_sorted(dir: &str) -> Result<Vec<String>,ProcessingError> {
+    let mut result = vec![];
+    for entry in read_dir(dir)? {
+        let path = entry?.path();
+        if !path.file_name().unwrap().to_str().unwrap().starts_with('.') {
+            result.push(path.to_str().unwrap().to_string());
+        }
+    }
+    result.sort();
+    Ok(result)
+}
+
 fn run_tests() -> Result<(),ProcessingError> {
     let mut failures = vec![];
-    for entry in read_dir("test/good")? {
-        let entry = entry?;
-        let path = entry.path();
-        let filename = path.to_str().unwrap();
-        if !path.file_name().unwrap().to_str().unwrap().starts_with('.') {
-            match process(filename) {
-                Ok(()) => println!("{:40} PASS", filename),
-                Err(e) => {
-                    println!("{:40} !!!! {:?}", filename, e);
-                    failures.push(filename.to_string());
-                }
+    for filename in &read_dir_sorted("test/good")? {
+        match process(filename) {
+            Ok(()) => println!("{:40} PASS", filename),
+            Err(e) => {
+                println!("{:40} !!!! {:?}", filename, e);
+                failures.push(filename.to_string());
             }
         }
     }
-    for entry in read_dir("test/bad")? {
-        let entry = entry?;
-        let path = entry.path();
-        let filename = path.to_str().unwrap();
-        if !path.file_name().unwrap().to_str().unwrap().starts_with('.') {
-            match process(filename) {
-                Ok(()) => {
-                    println!("{:40} !!!!", filename);
-                    failures.push(filename.to_string());
-                }
-                Err(_) => println!("{:40} FAIL as expected", filename)
+    for filename in &read_dir_sorted("test/bad")? {
+        match process(filename) {
+            Ok(()) => {
+                println!("{:40} !!!!", filename);
+                failures.push(filename.to_string());
             }
+            Err(_) => println!("{:40} FAIL as expected", filename)
         }
     }
 

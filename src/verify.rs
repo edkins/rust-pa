@@ -13,13 +13,13 @@ pub enum Code {
     AlreadyDefined,
     NotDefiningAnything,
     CanOnlyDefineOneSymbolAtOnce,
-    QuantifiersHaveSameName,
     DefMustBeIff,
     DefLhsVarMismatch,
     NoDefinitionRules,
-    MultipleDefinitionRulles,
+    MultipleDefinitionRules,
 
     // Errors in boolean expressions
+    QuantifiersHaveSameName,
     UsingUndefinedPredicate,
     WrongNumberOfArguments,
     NameBoundTwice,
@@ -49,12 +49,12 @@ pub enum Code {
     FalseIntroNotContradiction, // FalseIntro
     FalseIntroNotFalse,
     FalseElimNotFalse,          // FalseElim
-    NotIntroIsntFalse,           // NotIntro
+    NotIntroIsntFalse,          // NotIntro
     NotIntroIsntNot,
     NotIntroWrongNot,
     DoubleNotElimWrong,         // DoubleNotElim
     DoubleNotElimIsnt,
-    NotIntroducingAnd,          // AndIntro
+    AndIntroIsnt,               // AndIntro
     AndIntroBadLhs,
     AndIntroBadRhs,
     AndElimLMismatch,           // AndElimL
@@ -173,7 +173,7 @@ impl ProofChecker {
             return Code::NoDefinitionRules.at(def.pos);
         }
         if def.rules.len() > 1 {
-            return Code::MultipleDefinitionRulles.at(def.pos);
+            return Code::MultipleDefinitionRules.at(def.pos);
         }
 
         match &def.rules[0] {
@@ -300,9 +300,9 @@ impl ProofChecker {
             Step::Imp(b) => {
                 self.check_boolexpr(b.pos, &b.hyp, bound)?;
                 let mut psteps = previous_steps.to_vec();
-                psteps.push(ProcessedStep::Claim(b.id, b.hyp.clone()));
+                psteps.push(ProcessedStep::Claim(b.hyp_id, b.hyp.clone()));
                 let c = self.process_contents(b.pos, &b.contents, psteps, bound)?;
-                Ok(ProcessedStep::Imp(b.pos, b.hyp.clone(), c))
+                Ok(ProcessedStep::Imp(b.id, b.hyp.clone(), c))
             }
             Step::ABox(b) => {
                 if bound.contains(&b.name) {
@@ -321,7 +321,7 @@ impl ProofChecker {
                 b2.push(b.name.clone());
                 self.check_boolexpr(b.pos, &b.hyp, &b2)?;
                 let mut psteps = previous_steps.to_vec();
-                psteps.push(ProcessedStep::Claim(b.pos, b.hyp.clone()));
+                psteps.push(ProcessedStep::Claim(b.hyp_id, b.hyp.clone()));
                 let c = self.process_contents(b.pos, &b.contents, previous_steps.to_vec(), &b2)?;
                 self.check_boolexpr(b.end_pos(), &c, bound)?;   // check conclusion doesn't contain bound variable, as this won't work with ExistsElim
                 Ok(ProcessedStep::EBox(b.id, b.name.clone(), b.hyp.clone(), c))
@@ -423,7 +423,7 @@ impl ProofChecker {
                         return Code::AndIntroBadRhs.at(pos);
                     }
                 } else {
-                    return Code::NotIntroducingAnd.at(pos);
+                    return Code::AndIntroIsnt.at(pos);
                 }
             }
             Justification::AndElimL(id_and) => {
@@ -456,7 +456,7 @@ impl ProofChecker {
             }
             Justification::OrIntroR(id_rhs) => {
                 let rhs = lookup_claim(pos,previous_steps,*id_rhs)?;
-                if let BoolExpr::Or(s_rhs, _) = statement {
+                if let BoolExpr::Or(_, s_rhs) = statement {
                     if **s_rhs != *rhs {
                         return Code::OrIntroRMismatch.at(pos);
                     }

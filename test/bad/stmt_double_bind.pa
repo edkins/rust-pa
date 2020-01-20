@@ -1,0 +1,4 @@
+def foo for a b {
+    foo(a,b) <-> forall c, forall c, a = c
+}
+

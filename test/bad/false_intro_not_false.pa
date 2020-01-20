@@ -1,0 +1,8 @@
+lemma bad : 0 = 0 {
+    given 0 = S(0) {
+        given ~(0 = S(0)) {
+	    ~false by false_intro 0 1;
+	}
+    }
+    0 = 0 by eq_intro;
+}

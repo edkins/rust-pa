@@ -1,0 +1,9 @@
+lemma wrong_step : forall x, x = x + 0 {
+    forall x, x + 0 = x by add_zero;
+    given x {
+        x + 0 = x by all_elim 0;
+        x + 0 = x + 0 by eq_intro;
+	x = x + 0 by eq_elim 0 3;
+    }
+    forall x, x = x + 0 by all_intro 5;
+}

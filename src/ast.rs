@@ -82,6 +82,7 @@ pub struct StepClaim {
 pub struct StepImp {
     pub id: StepId,
     pub pos: Pos,
+    pub hyp_id: StepId,
     pub hyp: BoolExpr,
     pub contents: Vec<Step>,
 }
@@ -97,6 +98,7 @@ pub struct StepEBox {
     pub id: StepId,
     pub pos: Pos,
     pub name: VarName,
+    pub hyp_id: StepId,
     pub hyp: BoolExpr,
     pub contents: Vec<Step>,
 }

@@ -1,0 +1,17 @@
+lemma zero_add : forall x, 0 + x = x {
+    forall x, x + 0 = x by add_zero;
+    forall x, forall y, x + S(y) = S(x + y) by add_succ;
+    0 + 0 = 0 by all_elim 0;
+    given x {
+        given 0 + x = x {
+            forall y, 0 + S(y) = S(0 + y) by all_elim 1;
+            0 + S(x) = S(0 + x) by all_elim 5;
+            0 + S(x) = S(x) by eq_elim 4 6;
+        }
+        0 + x = x -> 0 + S(x) = S(x) by imp_intro 8;
+    }
+    forall x, 0 + x = x -> 0 + S(x) = S(x) by all_intro 10;
+    0 + 0 = 0 & forall x, 0 + x = x -> 0 + S(x) = S(x) by and_intro 2 11;
+    (0 + 0 = 0 & forall x, 0 + x = x -> 0 + S(x) = S(x)) -> forall x, 0 + x = x by induction;
+    forall x, 0 + x = x by imp_elim 13 12;
+}

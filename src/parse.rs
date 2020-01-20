@@ -56,15 +56,15 @@ fn word(input: &str) -> IResult<&str, &str, ParseError> {
     terminated(take_while1(|c|is_alphanumeric(c) || c == '_'),ws1)(input)
 }
 
-fn fail<T>(input: &str) -> IResult<&str, T, ParseError> {
-    Err(nom::Err::Failure(ParseError{pos: input.len()}))
+fn error<T>(input: &str) -> IResult<&str, T, ParseError> {
+    Err(nom::Err::Error(ParseError{pos: input.len()}))
 }
 
 fn pred_name(input: &str) -> IResult<&str, PredName, ParseError> {
     let (input,w) = word(input)?;
     match PredName::from_str(w) {
         Ok(name) => Ok((input,name)),
-        Err(_) => fail(input)
+        Err(_) => error(input)
     }
 }
 
@@ -72,7 +72,7 @@ fn lemma_name(input: &str) -> IResult<&str, LemmaName, ParseError> {
     let (input,w) = word(input)?;
     match LemmaName::from_str(w) {
         Ok(name) => Ok((input,name)),
-        Err(_) => fail(input)
+        Err(_) => error(input)
     }
 }
 
@@ -80,7 +80,7 @@ fn var_name(input: &str) -> IResult<&str, VarName, ParseError> {
     let (input,w) = word(input)?;
     match VarName::from_str(w) {
         Ok(name) => Ok((input,name)),
-        Err(_) => fail(input)
+        Err(_) => error(input)
     }
 }
 
@@ -93,7 +93,7 @@ fn stepid(input: &str) -> IResult<&str, StepId, ParseError> {
     let (input,_) = ws1(input)?;
     match digits.parse() {
         Ok(n) => Ok((input,n)),
-        Err(_) => fail(input)
+        Err(_) => error(input)
     }
 }
 
@@ -181,7 +181,7 @@ fn all_expr(input: &str) -> IResult<&str, BoolExpr, ParseError> {
     let (input,_) = keyword("forall")(input)?;
     let (input,name) = var_name(input)?;
     let (input,_) = symbol(",")(input)?;
-    let (input,expr) = bool_expr_inner(input)?;
+    let (input,expr) = bool_expr(input)?;
     Ok((input,BoolExpr::All(name,Box::new(expr))))
 }
 
@@ -189,7 +189,7 @@ fn exists_expr(input: &str) -> IResult<&str, BoolExpr, ParseError> {
     let (input,_) = keyword("exists")(input)?;
     let (input,name) = var_name(input)?;
     let (input,_) = symbol(",")(input)?;
-    let (input,expr) = bool_expr_inner(input)?;
+    let (input,expr) = bool_expr(input)?;
     Ok((input,BoolExpr::Exists(name,Box::new(expr))))
 }
 
@@ -325,7 +325,7 @@ fn justification(input: &str) -> IResult<&str, Justification, ParseError> {
             one_step(Justification::AllElim, "all_elim"),
             one_step(Justification::ExistsIntro, "exists_intro"),
             two_steps(Justification::ExistsElim, "exists_elim"),
-            one_step(Justification::Rename, "rename"),
+            one_step(Justification::Rename, "renaming"),
         )),
         alt((
             value(Justification::ZeroIsNotSucc, keyword("zero_is_not_succ")),
@@ -366,7 +366,8 @@ fn claim(id: StepId) -> impl Fn(&str) -> IResult<&str, (StepId,Step), ParseError
         let pos = input.len();
         let (input,statement) = bool_expr(input)?;
         let (input,_) = keyword("by")(input)?;
-        let (input,justification) = justification(input)?;
+        let (input,justification) = cut(justification)(input)?;
+        let (input,_) = cut(symbol(";"))(input)?;
         let nextid = id + 1;
         Ok((input,(nextid,Step::Claim(StepClaim{
             id,
@@ -384,11 +385,12 @@ fn ebox(id: StepId) -> impl Fn(&str) -> IResult<&str, (StepId,Step), ParseError>
         let (input,name) = var_name(input)?;
         let (input,_) = symbol(",")(input)?;
         let (input,hyp) = bool_expr(input)?;
-        let (input,(nextid,contents)) = list_of_steps(id, input)?;
-        Ok((input,(nextid,Step::EBox(StepEBox{
-            id,
+        let (input,(nextid,contents)) = list_of_steps(id+1, input)?;
+        Ok((input,(nextid+1,Step::EBox(StepEBox{
+            id: nextid,
             pos,
             name,
+            hyp_id: id,
             hyp,
             contents
         }))))
@@ -400,9 +402,9 @@ fn abox(id: StepId) -> impl Fn(&str) -> IResult<&str, (StepId,Step), ParseError>
         let pos = input.len();
         let (input,_) = keyword("given")(input)?;
         let (input,name) = var_name(input)?;
-        let (input,(nextid,contents)) = list_of_steps(id, input)?;
-        Ok((input,(nextid,Step::ABox(StepABox{
-            id,
+        let (input,(nextid,contents)) = list_of_steps(id+1, input)?;
+        Ok((input,(nextid+1,Step::ABox(StepABox{
+            id: nextid,
             pos,
             name,
             contents
@@ -415,10 +417,11 @@ fn imp(id: StepId) -> impl Fn(&str) -> IResult<&str, (StepId,Step), ParseError> 
         let pos = input.len();
         let (input,_) = keyword("given")(input)?;
         let (input,hyp) = bool_expr(input)?;
-        let (input,(nextid,contents)) = list_of_steps(id, input)?;
-        Ok((input,(nextid,Step::Imp(StepImp{
-            id,
+        let (input,(nextid,contents)) = list_of_steps(id+1, input)?;
+        Ok((input,(nextid+1,Step::Imp(StepImp{
+            id: nextid,
             pos,
+            hyp_id: id,
             hyp,
             contents
         }))))
@@ -440,7 +443,7 @@ fn list_of_steps(mut id: StepId, input: &str) -> IResult<&str, (StepId,Vec<Step>
     let mut result = vec![];
     let (mut input,_) = symbol("{")(input)?;
     loop {
-        match terminated(step(id), symbol(";"))(input) {
+        match step(id)(input) {
             Ok((input2,(id2,step))) => {
                 input = input2;
                 id = id2;
@@ -450,7 +453,7 @@ fn list_of_steps(mut id: StepId, input: &str) -> IResult<&str, (StepId,Vec<Step>
             Err(e) => return Err(e)
         }
     }
-    let (input,_) = symbol("}")(input)?;
+    let (input,_) = cut(symbol("}"))(input)?;
     Ok((input,(id,result)))
 }
 

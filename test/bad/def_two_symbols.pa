@@ -1,0 +1,5 @@
+def foo, bar for a b {
+    foo(a,b) <-> a = b;
+    bar(a,b) <-> ~(a = b)
+}
+

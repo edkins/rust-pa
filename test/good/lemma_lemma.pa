@@ -1,0 +1,24 @@
+lemma x_plus_one_is_succ_x : forall x, x + S(0) = S(x) {
+    forall x, forall y, (x + S(y) = S(x + y)) by add_succ;
+    forall x, (x + 0 = x) by add_zero;
+    given x {
+        forall y, x + S(y) = S(x + y) by all_elim 0;
+        x + S(0) = S(x + 0) by all_elim 3;
+	x + 0 = x by all_elim 1;
+	x + S(0) = S(x) by eq_elim 5 4;
+    }
+    forall x, x + S(0) = S(x) by all_intro 7;
+}
+
+lemma zero_not_x_plus_one : forall x, ~(0 = x + S(0)) {
+    forall x, ~(0 = S(x)) by zero_is_not_succ;
+    forall x, x + S(0) = S(x) by lemma x_plus_one_is_succ_x;
+    given x {
+        ~(0 = S(x)) by all_elim 0;
+	x + S(0) = S(x) by all_elim 1;
+	x + S(0) = x + S(0) by eq_intro;
+	S(x) = x + S(0) by eq_elim 4 5;
+	~(0 = x + S(0)) by eq_elim 6 3;
+    }
+    forall x, ~(0 = x + S(0)) by all_intro 8;
+}

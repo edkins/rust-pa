@@ -1,0 +1,5 @@
+lemma ebox_empty : 0 = 0 {
+    given x, x = 0 {
+    }
+    0 = 0 by eq_intro;
+}

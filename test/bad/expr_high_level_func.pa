@@ -1,0 +1,7 @@
+def foo for a b {
+    foo(a,b) <-> a = b
+}
+
+def bar for a {
+    bar(a) <-> foo(a) = 0
+}
