@@ -2,112 +2,129 @@ use std::collections::HashMap;
 use crate::ast::{Script,Pos,VarName,PredName,BoolExpr,NatExpr,ItemDef,Item,ItemLemma,LemmaName,StepId,Justification,Step};
 
 #[derive(Debug)]
-pub enum VerificationError {
+pub struct VerificationError {
+    pub pos: Pos,
+    pub code: Code
+}
+
+#[derive(Debug,Clone,Copy)]
+pub enum Code {
     // Errors in definitions
-    AlreadyDefined(Pos,PredName),
-    NotDefiningAnything(Pos),
-    CanOnlyDefineOneSymbolAtOnce(Pos,PredName,PredName),
-    QuantifiersHaveSameName(Pos,VarName),
-    DefMustBeIff(Pos),
-    DefLhsMustBe(Pos,BoolExpr),
-    NoDefinitionRules(Pos),
-    MultipleDefinitionRulles(Pos),
+    AlreadyDefined,
+    NotDefiningAnything,
+    CanOnlyDefineOneSymbolAtOnce,
+    QuantifiersHaveSameName,
+    DefMustBeIff,
+    DefLhsVarMismatch,
+    NoDefinitionRules,
+    MultipleDefinitionRulles,
 
     // Errors in boolean expressions
-    UsingUndefinedPredicate(Pos,PredName),
-    WrongNumberOfArguments(Pos,PredName,usize/*expected*/,usize/*supplied*/),
-    NameBoundTwice(Pos,VarName),
+    UsingUndefinedPredicate,
+    WrongNumberOfArguments,
+    NameBoundTwice,
 
     // Errors in nat expressions
-    NameNotBound(Pos,VarName),
-    UnexpectedHighLevelNatExpr(Pos,NatExpr),
+    NameNotBound,
+    UnexpectedHighLevelNatExpr,
 
     // Errors in proofs
-    BoxIsEmpty(Pos),
-    BoxDoesNotEndWithClaim(Pos),
-    ProofEndsWithWrongClaim(Pos, BoolExpr/*proved*/, BoolExpr/*claimed*/),
-    BadStepId(Pos,StepId),
-    ABoxAlreadyBound(Pos),
-    EBoxAlreadyBound(Pos),
+    BoxIsEmpty,
+    BoxDoesNotEndWithClaim,
+    ProofEndsWithWrongClaim,
+    BadStepId,
+    ABoxAlreadyBound,
+    EBoxAlreadyBound,
 
     // Errors in justification steps
-    NoSuchDefinition(Pos,PredName),  // ByDefinition
-    NotDefinedThatWay(Pos,PredName),
-    NoSuchLemma(Pos,LemmaName),      // Lemma
-    LemmaDoesNotSayThat(Pos,LemmaName),
-    LhsNotIdenticalToRhs(Pos),       // EqIntro
-    NotIntroducingAnEquality(Pos),
-    EqualElimMismatchNat(Pos,NatExpr,NatExpr),   // EqElim
-    EqualElimMismatchBool(Pos,BoolExpr,BoolExpr),
-    NotEliminatingAnEquality(Pos),
-    StatementsDoNotContradict(Pos),  // FalseIntro
-    NotIntroducingFalse(Pos),
-    WasNotFalse(Pos),                // FalseElim
-    DidNotLeadToFalse(Pos),          // NotIntro
-    NotIntroducingNot(Pos),
-    WrongNot(Pos),
-    DoubleNotWrongThing(Pos),        // DoubleNotElim
-    NotDoubleNot(Pos),
-    NotIntroducingAnd(Pos),          // AndIntro
-    AndIntroBadLhs(Pos),
-    AndIntroBadRhs(Pos),
-    AndElimLMismatch(Pos),           // AndElimL
-    AndElimLNotAnd(Pos),
-    AndElimRMismatch(Pos),           // AndElimR
-    AndElimRNotAnd(Pos),
-    OrIntroLMismatch(Pos),           // OrIntroL
-    OrIntroLNotOr(Pos),
-    OrIntroRMismatch(Pos),           // OrIntroR
-    OrIntroRNotOr(Pos),
-    OrElimNotOr(Pos),                // OrElim
-    OrElimBadHypL(Pos),
-    OrElimBadHypR(Pos),
-    OrElimBadConcL(Pos),
-    OrElimBadConcR(Pos),
-    ImpIntroBadHyp(Pos),             // ImpIntro
-    ImpIntroBadConc(Pos),
-    ImpIntroNotImp(Pos),
-    ImpElimBadHyp(Pos),              // ImpElim
-    ImpElimBadConc(Pos),
-    ImpElimNotImp(Pos),
-    IffIntroNotIff(Pos),             // IffIntro
-    IffIntroNotImpL(Pos),
-    IffIntroNotImpR(Pos),
-    IffIntroBadHypL(Pos),
-    IffIntroBadHypR(Pos),
-    IffIntroBadConcL(Pos),
-    IffIntroBadConcR(Pos),
-    IffElimLNotIff(Pos),             // IffElimL
-    IffElimLNotImp(Pos),
-    IffElimLBadHyp(Pos),
-    IffElimLBadConc(Pos),
-    IffElimRNotIff(Pos),             // IffElimR
-    IffElimRNotImp(Pos),
-    IffElimRBadHyp(Pos),
-    IffElimRBadConc(Pos),
-    AllIntroNotForAll(Pos),          // AllIntro
-    AllIntroWrongName(Pos),
-    AllIntroWrongConc(Pos),
-    AllElimNotForAll(Pos),           // AllElim
-    AllElimBadSubstitution(Pos),
-    ExistsIntroBadSubstitution(Pos), // ExistsIntro
-    ExistsIntroNotExists(Pos),
-    ExistsElimNotExists(Pos),        // ExistsElim
-    ExistsElimWrongName(Pos),
-    ExistsElimBadHyp(Pos),
-    ExistsElimBadConc(Pos),
-    RenameMismatch(Pos),             // Rename
-    RenameBoundTwice(Pos),
-    ZeroIsNotSuccWrong(Pos),               // Axioms
-    SuccInjWrong(Pos),
-    AddZeroWrong(Pos),
-    AddSuccWrong(Pos),
-    MulZeroWrong(Pos),
-    InductionMalformed(Pos),         // Induction
-    InductionWrongVar(Pos),
-    InductionWrongIndHyp(Pos),
-    InductionWrongBase(Pos),
-    InductionWrongIndConc(Pos),
+    ByDefinitionDoesNotExist,   // ByDefinition
+    ByDefinitionWrong,
+    LemmaDoesNotExist,          // Lemma
+    LemmaDoesNotSayThat,
+    EqIntroSidesMismatch,       // EqIntro
+    EqIntroNotEq,
+    EqElimMismatchNat,          // EqElim
+    EqElimMismatchBool,
+    EqElimNotEq,
+    FalseIntroNotContradiction, // FalseIntro
+    FalseIntroNotFalse,
+    FalseElimNotFalse,          // FalseElim
+    NotIntroIsntFalse,           // NotIntro
+    NotIntroIsntNot,
+    NotIntroWrongNot,
+    DoubleNotElimWrong,         // DoubleNotElim
+    DoubleNotElimIsnt,
+    NotIntroducingAnd,          // AndIntro
+    AndIntroBadLhs,
+    AndIntroBadRhs,
+    AndElimLMismatch,           // AndElimL
+    AndElimLNotAnd,
+    AndElimRMismatch,           // AndElimR
+    AndElimRNotAnd,
+    OrIntroLMismatch,           // OrIntroL
+    OrIntroLNotOr,
+    OrIntroRMismatch,           // OrIntroR
+    OrIntroRNotOr,
+    OrElimNotOr,                // OrElim
+    OrElimBadHypL,
+    OrElimBadHypR,
+    OrElimBadConcL,
+    OrElimBadConcR,
+    ImpIntroBadHyp,             // ImpIntro
+    ImpIntroBadConc,
+    ImpIntroNotImp,
+    ImpElimBadHyp,              // ImpElim
+    ImpElimBadConc,
+    ImpElimNotImp,
+    IffIntroNotIff,             // IffIntro
+    IffIntroNotImpL,
+    IffIntroNotImpR,
+    IffIntroBadHypL,
+    IffIntroBadHypR,
+    IffIntroBadConcL,
+    IffIntroBadConcR,
+    IffElimLNotIff,             // IffElimL
+    IffElimLNotImp,
+    IffElimLBadHyp,
+    IffElimLBadConc,
+    IffElimRNotIff,             // IffElimR
+    IffElimRNotImp,
+    IffElimRBadHyp,
+    IffElimRBadConc,
+    AllIntroNotForAll,          // AllIntro
+    AllIntroWrongName,
+    AllIntroWrongConc,
+    AllElimNotForAll,           // AllElim
+    AllElimBadSubstitution,
+    ExistsIntroBadSubstitution, // ExistsIntro
+    ExistsIntroNotExists,
+    ExistsElimNotExists,        // ExistsElim
+    ExistsElimWrongName,
+    ExistsElimBadHyp,
+    ExistsElimBadConc,
+    RenameMismatch,             // Rename
+    RenameBoundTwice,
+    ZeroIsNotSuccWrong,         // Axioms
+    SuccInjWrong,
+    AddZeroWrong,
+    AddSuccWrong,
+    MulZeroWrong,
+    InductionMalformed,         // Induction
+    InductionWrongVar,
+    InductionWrongIndHyp,
+    InductionWrongBase,
+    InductionWrongIndConc,
+}
+
+impl Code {
+    fn at<T>(self, pos: Pos) -> Result<T,VerificationError> {
+        Err(VerificationError{pos, code:self})
+    }
+    fn mapat<T>(self, pos: Pos) -> impl Fn(T) -> VerificationError {
+        move |_| {
+            VerificationError{pos, code:self}
+        }
+    }
 }
 
 struct ProofChecker {
@@ -138,25 +155,25 @@ fn any_equal<T:Eq+Clone>(xs: &[T]) -> Option<T> {
 impl ProofChecker {
     fn add_def(&mut self, def: &ItemDef) -> Result<(),VerificationError> {
         if def.names.is_empty() {
-            return Err(VerificationError::NotDefiningAnything(def.pos));
+            return Code::NotDefiningAnything.at(def.pos);
         }
         if def.names.len() > 1 {
-            return Err(VerificationError::CanOnlyDefineOneSymbolAtOnce(def.pos, def.names[0].clone(), def.names[1].clone()));
+            return Code::CanOnlyDefineOneSymbolAtOnce.at(def.pos);
         }
         let name = &def.names[0];
-        if let Some(bad) = any_equal(&def.quants) {
-            return Err(VerificationError::QuantifiersHaveSameName(def.pos, bad));
+        if any_equal(&def.quants).is_some() {
+            return Code::QuantifiersHaveSameName.at(def.pos);
         }
 
         if self.defined_symbols.contains_key(name) {
-            return Err(VerificationError::AlreadyDefined(def.pos, name.clone()));
+            return Code::AlreadyDefined.at(def.pos);
         }
 
         if def.rules.is_empty() {
-            return Err(VerificationError::NoDefinitionRules(def.pos));
+            return Code::NoDefinitionRules.at(def.pos);
         }
         if def.rules.len() > 1 {
-            return Err(VerificationError::MultipleDefinitionRulles(def.pos));
+            return Code::MultipleDefinitionRulles.at(def.pos);
         }
 
         match &def.rules[0] {
@@ -165,7 +182,7 @@ impl ProofChecker {
                 let arity = vars_as_exprs.len();
                 let expected_lhs = BoolExpr::UserPred(name.clone(), vars_as_exprs);
                 if **lhs != expected_lhs {
-                    return Err(VerificationError::DefLhsMustBe(def.pos, expected_lhs));
+                    return Code::DefLhsVarMismatch.at(def.pos);
                 }
                 self.check_boolexpr(def.pos, &*rhs, &def.quants)?;
                 self.defined_symbols.insert(name.clone(), arity);
@@ -178,7 +195,7 @@ impl ProofChecker {
                 self.definition_claims.insert(name.clone(), claim);
                 Ok(())
             }
-            _ => Err(VerificationError::DefMustBeIff(def.pos))
+            _ => Code::DefMustBeIff.at(def.pos)
         }
     }
     fn check_boolexpr(&self, pos: Pos, expr: &BoolExpr, bound: &[VarName]) -> Result<(),VerificationError> {
@@ -186,11 +203,11 @@ impl ProofChecker {
             BoolExpr::UserPred(p, xs) => {
                 match self.defined_symbols.get(&p) {
                     None => {
-                        return Err(VerificationError::UsingUndefinedPredicate(pos, p.clone()));
+                        return Code::UsingUndefinedPredicate.at(pos);
                     }
                     Some(arity) => {
                         if xs.len() != *arity {
-                            return Err(VerificationError::WrongNumberOfArguments(pos, p.clone(), *arity, xs.len()));
+                            return Code::WrongNumberOfArguments.at(pos);
                         }
                     }
                 }
@@ -212,7 +229,7 @@ impl ProofChecker {
             }
             BoolExpr::All(x, p) | BoolExpr::Exists(x, p) => {
                 if bound.contains(x) {
-                    return Err(VerificationError::NameBoundTwice(pos, x.clone()));
+                    return Code::NameBoundTwice.at(pos);
                 }
                 let mut b2 = bound.to_vec();
                 b2.push(x.clone());
@@ -226,7 +243,7 @@ impl ProofChecker {
         match expr {
             NatExpr::Var(x) => {
                 if !bound.contains(x) {
-                    return Err(VerificationError::NameNotBound(pos, x.clone()));
+                    return Code::NameNotBound.at(pos);
                 }
             }
             NatExpr::Zero => {}
@@ -237,7 +254,7 @@ impl ProofChecker {
                 self.check_natexpr(pos, a, bound)?;
                 self.check_natexpr(pos, b, bound)?;
             }
-            _ => return Err(VerificationError::UnexpectedHighLevelNatExpr(pos, expr.clone()))
+            _ => return Code::UnexpectedHighLevelNatExpr.at(pos)
         }
         Ok(())
     }
@@ -248,7 +265,7 @@ impl ProofChecker {
         let c = self.process_contents(lemma.pos, &lemma.proof, vec![], &[])?;
 
         if c != lemma.statement {
-            return Err(VerificationError::ProofEndsWithWrongClaim(lemma.end_pos(), c.clone(), lemma.statement.clone()));
+            return Code::ProofEndsWithWrongClaim.at(lemma.end_pos());
         }
         
         self.verified_claims.insert(lemma.name.clone(), lemma.statement.clone());
@@ -262,14 +279,14 @@ impl ProofChecker {
         }
 
         if processed.is_empty() {
-            return Err(VerificationError::BoxIsEmpty(pos));
+            return Code::BoxIsEmpty.at(pos);
         }
 
         let last_step = &processed[processed.len() - 1];
         if let ProcessedStep::Claim(_,c) = last_step {
             Ok(c.clone())
         } else {
-            Err(VerificationError::BoxDoesNotEndWithClaim(contents[contents.len()-1].pos()))
+            Code::BoxDoesNotEndWithClaim.at(contents[contents.len()-1].pos())
         }
     }
 
@@ -285,20 +302,20 @@ impl ProofChecker {
                 let mut psteps = previous_steps.to_vec();
                 psteps.push(ProcessedStep::Claim(b.id, b.hyp.clone()));
                 let c = self.process_contents(b.pos, &b.contents, psteps, bound)?;
-                Ok(ProcessedStep::Imp(b.pos, b.hyp.clone(), c.clone()))
+                Ok(ProcessedStep::Imp(b.pos, b.hyp.clone(), c))
             }
             Step::ABox(b) => {
                 if bound.contains(&b.name) {
-                    return Err(VerificationError::ABoxAlreadyBound(b.pos));
+                    return Code::ABoxAlreadyBound.at(b.pos);
                 }
                 let mut b2 = bound.to_vec();
                 b2.push(b.name.clone());
                 let c = self.process_contents(b.pos, &b.contents, previous_steps.to_vec(), &b2)?;
-                Ok(ProcessedStep::ABox(b.id, b.name.clone(), c.clone()))
+                Ok(ProcessedStep::ABox(b.id, b.name.clone(), c))
             }
             Step::EBox(b) => {
                 if bound.contains(&b.name) {
-                    return Err(VerificationError::EBoxAlreadyBound(b.pos));
+                    return Code::EBoxAlreadyBound.at(b.pos);
                 }
                 let mut b2 = bound.to_vec();
                 b2.push(b.name.clone());
@@ -307,7 +324,7 @@ impl ProofChecker {
                 psteps.push(ProcessedStep::Claim(b.pos, b.hyp.clone()));
                 let c = self.process_contents(b.pos, &b.contents, previous_steps.to_vec(), &b2)?;
                 self.check_boolexpr(b.end_pos(), &c, bound)?;   // check conclusion doesn't contain bound variable, as this won't work with ExistsElim
-                Ok(ProcessedStep::EBox(b.id, b.name.clone(), b.hyp.clone(), c.clone()))
+                Ok(ProcessedStep::EBox(b.id, b.name.clone(), b.hyp.clone(), c))
             }
         }
     }
@@ -317,28 +334,28 @@ impl ProofChecker {
             Justification::ByDefinition(pred) => {
                 if let Some(actual_statement) = self.definition_claims.get(pred) {
                     if statement != actual_statement {
-                        return Err(VerificationError::NotDefinedThatWay(pos, pred.clone()));
+                        return Code::ByDefinitionWrong.at(pos);
                     }
                 } else {
-                    return Err(VerificationError::NoSuchDefinition(pos, pred.clone()));
+                    return Code::ByDefinitionDoesNotExist.at(pos);
                 }
             }
             Justification::Lemma(lemma) => {
                 if let Some(actual_statement) = self.verified_claims.get(lemma) {
                     if statement != actual_statement {
-                        return Err(VerificationError::LemmaDoesNotSayThat(pos, lemma.clone()));
+                        return Code::LemmaDoesNotSayThat.at(pos);
                     }
                 } else {
-                    return Err(VerificationError::NoSuchLemma(pos, lemma.clone()));
+                    return Code::LemmaDoesNotExist.at(pos);
                 }
             }
             Justification::EqualIntro => {
                 if let BoolExpr::Eq(lhs,rhs) = statement {
                     if lhs != rhs {
-                        return Err(VerificationError::LhsNotIdenticalToRhs(pos));
+                        return Code::EqIntroSidesMismatch.at(pos);
                     }
                 } else {
-                    return Err(VerificationError::NotIntroducingAnEquality(pos));
+                    return Code::EqIntroNotEq.at(pos);
                 }
             }
             Justification::EqualElim(equality,to_rewrite) => {
@@ -346,53 +363,53 @@ impl ProofChecker {
                     let statement_lhs = lookup_claim(pos,previous_steps,*to_rewrite)?;
                     self.check_equal_elim(pos, lhs, rhs, statement_lhs, statement)?;
                 } else {
-                    return Err(VerificationError::NotEliminatingAnEquality(pos));
+                    return Code::EqElimNotEq.at(pos);
                 }
             }
             Justification::FalseIntro(id_p, id_notp) => {
                 let p = lookup_claim(pos,previous_steps,*id_p)?;
                 if let BoolExpr::Not(p2) = lookup_claim(pos,previous_steps,*id_notp)? {
                     if *p != **p2 {
-                        return Err(VerificationError::StatementsDoNotContradict(pos));
+                        return Code::FalseIntroNotContradiction.at(pos);
                     }
                     if *statement != BoolExpr::False {
-                        return Err(VerificationError::NotIntroducingFalse(pos));
+                        return Code::FalseIntroNotFalse.at(pos);
                     }
                 } else {
-                    return Err(VerificationError::StatementsDoNotContradict(pos));
+                    return Code::FalseIntroNotContradiction.at(pos);
                 }
             }
             Justification::FalseElim(id_false) => {
                 if let BoolExpr::False = lookup_claim(pos,previous_steps,*id_false)? {
                     // don't need to check statement because it can be anything
                 } else {
-                    return Err(VerificationError::WasNotFalse(pos));
+                    return Code::FalseElimNotFalse.at(pos);
                 }
             }
             Justification::NotIntro(id_box) => {
                 if let (hyp,BoolExpr::False) = lookup_imp(pos,previous_steps,*id_box)? {
                     if let BoolExpr::Not(s2) = statement {
                         if **s2 != *hyp {
-                            return Err(VerificationError::WrongNot(pos));
+                            return Code::NotIntroWrongNot.at(pos);
                         }
                     } else {
-                        return Err(VerificationError::NotIntroducingNot(pos));
+                        return Code::NotIntroIsntNot.at(pos);
                     }
                 } else {
-                    return Err(VerificationError::DidNotLeadToFalse(pos));
+                    return Code::NotIntroIsntFalse.at(pos);
                 }
             }
             Justification::DoubleNotElim(id_notnot) => {
                 if let BoolExpr::Not(notp) = lookup_claim(pos,previous_steps,*id_notnot)? {
                     if let BoolExpr::Not(p) = &**notp {
                         if **p != *statement {
-                            return Err(VerificationError::DoubleNotWrongThing(pos));
+                            return Code::DoubleNotElimWrong.at(pos);
                         }
                     } else {
-                        return Err(VerificationError::NotDoubleNot(pos));
+                        return Code::DoubleNotElimIsnt.at(pos);
                     }
                 } else {
-                    return Err(VerificationError::NotDoubleNot(pos));
+                    return Code::DoubleNotElimIsnt.at(pos);
                 }
             }
             Justification::AndIntro(id_lhs, id_rhs) => {
@@ -400,51 +417,51 @@ impl ProofChecker {
                 let rhs = lookup_claim(pos,previous_steps,*id_rhs)?;
                 if let BoolExpr::And(s_lhs, s_rhs) = statement {
                     if **s_lhs != *lhs {
-                        return Err(VerificationError::AndIntroBadLhs(pos));
+                        return Code::AndIntroBadLhs.at(pos);
                     }
                     if **s_rhs != *rhs {
-                        return Err(VerificationError::AndIntroBadRhs(pos));
+                        return Code::AndIntroBadRhs.at(pos);
                     }
                 } else {
-                    return Err(VerificationError::NotIntroducingAnd(pos));
+                    return Code::NotIntroducingAnd.at(pos);
                 }
             }
             Justification::AndElimL(id_and) => {
                 if let BoolExpr::And(lhs, _) = lookup_claim(pos,previous_steps,*id_and)? {
                     if **lhs != *statement {
-                        return Err(VerificationError::AndElimLMismatch(pos));
+                        return Code::AndElimLMismatch.at(pos);
                     }
                 } else {
-                    return Err(VerificationError::AndElimLNotAnd(pos));
+                    return Code::AndElimLNotAnd.at(pos);
                 }
             }
             Justification::AndElimR(id_and) => {
                 if let BoolExpr::And(_, rhs) = lookup_claim(pos,previous_steps,*id_and)? {
                     if **rhs != *statement {
-                        return Err(VerificationError::AndElimRMismatch(pos));
+                        return Code::AndElimRMismatch.at(pos);
                     }
                 } else {
-                    return Err(VerificationError::AndElimRNotAnd(pos));
+                    return Code::AndElimRNotAnd.at(pos);
                 }
             }
             Justification::OrIntroL(id_lhs) => {
                 let lhs = lookup_claim(pos,previous_steps,*id_lhs)?;
                 if let BoolExpr::Or(s_lhs, _) = statement {
                     if **s_lhs != *lhs {
-                        return Err(VerificationError::OrIntroLMismatch(pos));
+                        return Code::OrIntroLMismatch.at(pos);
                     }
                 } else {
-                    return Err(VerificationError::OrIntroLNotOr(pos));
+                    return Code::OrIntroLNotOr.at(pos);
                 }
             }
             Justification::OrIntroR(id_rhs) => {
                 let rhs = lookup_claim(pos,previous_steps,*id_rhs)?;
                 if let BoolExpr::Or(s_rhs, _) = statement {
                     if **s_rhs != *rhs {
-                        return Err(VerificationError::OrIntroRMismatch(pos));
+                        return Code::OrIntroRMismatch.at(pos);
                     }
                 } else {
-                    return Err(VerificationError::OrIntroRNotOr(pos));
+                    return Code::OrIntroRNotOr.at(pos);
                 }
             }
             Justification::OrElim(id_or, id_box_l, id_box_r) => {
@@ -452,45 +469,45 @@ impl ProofChecker {
                     let (hyp_l, conc_l) = lookup_imp(pos,previous_steps,*id_box_l)?;
                     let (hyp_r, conc_r) = lookup_imp(pos,previous_steps,*id_box_r)?;
                     if *hyp_l != **lhs {
-                        return Err(VerificationError::OrElimBadHypL(pos));
+                        return Code::OrElimBadHypL.at(pos);
                     }
                     if *hyp_r != **rhs {
-                        return Err(VerificationError::OrElimBadHypR(pos));
+                        return Code::OrElimBadHypR.at(pos);
                     }
                     if conc_l != statement {
-                        return Err(VerificationError::OrElimBadConcL(pos));
+                        return Code::OrElimBadConcL.at(pos);
                     }
                     if conc_r != statement {
-                        return Err(VerificationError::OrElimBadConcR(pos));
+                        return Code::OrElimBadConcR.at(pos);
                     }
                 } else {
-                    return Err(VerificationError::OrElimNotOr(pos));
+                    return Code::OrElimNotOr.at(pos);
                 }
             }
             Justification::ImpIntro(id_box) => {
                 if let BoolExpr::Imp(s_hyp, s_conc) = statement {
                     let (hyp,conc) = lookup_imp(pos,previous_steps,*id_box)?;
                     if *hyp != **s_hyp {
-                        return Err(VerificationError::ImpIntroBadHyp(pos));
+                        return Code::ImpIntroBadHyp.at(pos);
                     }
                     if *conc != **s_conc {
-                        return Err(VerificationError::ImpIntroBadConc(pos));
+                        return Code::ImpIntroBadConc.at(pos);
                     }
                 } else {
-                    return Err(VerificationError::ImpIntroNotImp(pos));
+                    return Code::ImpIntroNotImp.at(pos);
                 }
             }
             Justification::ImpElim(id_imp, id_hyp) => {
                 if let BoolExpr::Imp(imp_hyp, imp_conc) = lookup_claim(pos,previous_steps,*id_imp)? {
                     let hyp = lookup_claim(pos,previous_steps,*id_hyp)?;
                     if *hyp != **imp_hyp {
-                        return Err(VerificationError::ImpElimBadHyp(pos));
+                        return Code::ImpElimBadHyp.at(pos);
                     }
                     if **imp_conc != *statement {
-                        return Err(VerificationError::ImpElimBadConc(pos));
+                        return Code::ImpElimBadConc.at(pos);
                     }
                 } else {
-                    return Err(VerificationError::ImpElimNotImp(pos));
+                    return Code::ImpElimNotImp.at(pos);
                 }
             }
             Justification::IffIntro(id_imp_l, id_imp_r) => {
@@ -498,103 +515,103 @@ impl ProofChecker {
                     if let BoolExpr::Imp(hyp_r, conc_r) = lookup_claim(pos,previous_steps,*id_imp_r)? {
                         if let BoolExpr::Iff(a, b) = statement {
                             if a != hyp_l {
-                                return Err(VerificationError::IffIntroBadHypL(pos));
+                                return Code::IffIntroBadHypL.at(pos);
                             }
                             if b != conc_l {
-                                return Err(VerificationError::IffIntroBadConcL(pos));
+                                return Code::IffIntroBadConcL.at(pos);
                             }
                             if a != hyp_r {
-                                return Err(VerificationError::IffIntroBadHypR(pos));
+                                return Code::IffIntroBadHypR.at(pos);
                             }
                             if b != conc_r {
-                                return Err(VerificationError::IffIntroBadConcR(pos));
+                                return Code::IffIntroBadConcR.at(pos);
                             }
                         } else {
-                            return Err(VerificationError::IffIntroNotIff(pos));
+                            return Code::IffIntroNotIff.at(pos);
                         }
                     } else {
-                        return Err(VerificationError::IffIntroNotImpR(pos));
+                        return Code::IffIntroNotImpR.at(pos);
                     }
                 } else {
-                    return Err(VerificationError::IffIntroNotImpL(pos));
+                    return Code::IffIntroNotImpL.at(pos);
                 }
             }
             Justification::IffElimL(id_iff) => {
                 if let BoolExpr::Iff(a,b) = lookup_claim(pos,previous_steps,*id_iff)? {
                     if let BoolExpr::Imp(hyp,conc) = statement {
                         if hyp != a {
-                            return Err(VerificationError::IffElimLBadHyp(pos));
+                            return Code::IffElimLBadHyp.at(pos);
                         }
                         if conc != b {
-                            return Err(VerificationError::IffElimLBadConc(pos));
+                            return Code::IffElimLBadConc.at(pos);
                         }
                     } else {
-                        return Err(VerificationError::IffElimLNotImp(pos));
+                        return Code::IffElimLNotImp.at(pos);
                     }
                 } else {
-                    return Err(VerificationError::IffElimLNotIff(pos));
+                    return Code::IffElimLNotIff.at(pos);
                 }
             }
             Justification::IffElimR(id_iff) => {
                 if let BoolExpr::Iff(a,b) = lookup_claim(pos,previous_steps,*id_iff)? {
                     if let BoolExpr::Imp(hyp,conc) = statement {
                         if hyp != b {
-                            return Err(VerificationError::IffElimRBadHyp(pos));
+                            return Code::IffElimRBadHyp.at(pos);
                         }
                         if conc != a {
-                            return Err(VerificationError::IffElimRBadConc(pos));
+                            return Code::IffElimRBadConc.at(pos);
                         }
                     } else {
-                        return Err(VerificationError::IffElimRNotImp(pos));
+                        return Code::IffElimRNotImp.at(pos);
                     }
                 } else {
-                    return Err(VerificationError::IffElimRNotIff(pos));
+                    return Code::IffElimRNotIff.at(pos);
                 }
             }
             Justification::AllIntro(id_box) => {
                 let (name,conc) = lookup_abox(pos,previous_steps,*id_box)?;
                 if let BoolExpr::All(s_name, s_conc) = statement {
                     if name != s_name {
-                        return Err(VerificationError::AllIntroWrongName(pos));  // right now we don't permit renaming in AllIntro
+                        return Code::AllIntroWrongName.at(pos);  // right now we don't permit renaming in AllIntro
                     }
                     if *conc != **s_conc {
-                        return Err(VerificationError::AllIntroWrongConc(pos));
+                        return Code::AllIntroWrongConc.at(pos);
                     }
                 } else {
-                    return Err(VerificationError::AllIntroNotForAll(pos));
+                    return Code::AllIntroNotForAll.at(pos);
                 }
             }
             Justification::AllElim(id_all) => {
                 if let BoolExpr::All(name, conc) = lookup_claim(pos,previous_steps,*id_all)? {
                     let mut subst = None;
-                    self.check_substitution(name, conc, statement, &mut subst, &[]).map_err(|_|VerificationError::AllElimBadSubstitution(pos))?;
+                    self.check_substitution(name, conc, statement, &mut subst, &[]).map_err(Code::AllElimBadSubstitution.mapat(pos))?;
                 } else {
-                    return Err(VerificationError::AllElimNotForAll(pos));
+                    return Code::AllElimNotForAll.at(pos);
                 }
             }
             Justification::ExistsIntro(id) => {
                 if let BoolExpr::Exists(name, conc) = statement {
                     let p = lookup_claim(pos,previous_steps,*id)?;
                     let mut subst = None;
-                    self.check_substitution(name, conc, p, &mut subst, &[]).map_err(|_|VerificationError::ExistsIntroBadSubstitution(pos))?;
+                    self.check_substitution(name, conc, p, &mut subst, &[]).map_err(Code::ExistsIntroBadSubstitution.mapat(pos))?;
                 } else {
-                    return Err(VerificationError::ExistsIntroNotExists(pos));
+                    return Code::ExistsIntroNotExists.at(pos);
                 }
             }
             Justification::ExistsElim(id_exists, id_box) => {
                 if let BoolExpr::Exists(ex_name, ex_conc) = lookup_claim(pos,previous_steps,*id_exists)? {
                     let (box_name, box_hyp, box_conc) = lookup_ebox(pos,previous_steps,*id_box)?;
                     if box_name != ex_name {
-                        return Err(VerificationError::ExistsElimWrongName(pos));
+                        return Code::ExistsElimWrongName.at(pos);
                     }
                     if *box_hyp != **ex_conc {
-                        return Err(VerificationError::ExistsElimBadHyp(pos));
+                        return Code::ExistsElimBadHyp.at(pos);
                     }
                     if box_conc != statement {
-                        return Err(VerificationError::ExistsElimBadConc(pos));
+                        return Code::ExistsElimBadConc.at(pos);
                     }
                 } else {
-                    return Err(VerificationError::ExistsElimNotExists(pos));
+                    return Code::ExistsElimNotExists.at(pos);
                 }
             }
             Justification::Rename(id) => {
@@ -608,13 +625,13 @@ impl ProofChecker {
                                 Box::new(BoolExpr::Eq(
                                         Box::new(NatExpr::Zero),
                                         Box::new(NatExpr::Succ(
-                                                Box::new(NatExpr::Var(x.clone()))
+                                                Box::new(NatExpr::Var(x))
                                         ))
                                 ))
                         ))
                 );
                 if expected != *statement {
-                    return Err(VerificationError::ZeroIsNotSuccWrong(pos));
+                    return Code::ZeroIsNotSuccWrong.at(pos);
                 }
             }
             Justification::SuccInj => {
@@ -632,14 +649,14 @@ impl ProofChecker {
                                                 ))
                                         )),
                                         Box::new(BoolExpr::Eq(
-                                                Box::new(NatExpr::Var(x.clone())),
-                                                Box::new(NatExpr::Var(y.clone()))
+                                                Box::new(NatExpr::Var(x)),
+                                                Box::new(NatExpr::Var(y))
                                         ))
                                 ))
                         ))
                 );
                 if expected != *statement {
-                    return Err(VerificationError::SuccInjWrong(pos));
+                    return Code::SuccInjWrong.at(pos);
                 }
             }
             Justification::AddZero => {
@@ -650,11 +667,11 @@ impl ProofChecker {
                                         Box::new(NatExpr::Var(x.clone())),
                                         Box::new(NatExpr::Zero)
                                 )),
-                                Box::new(NatExpr::Var(x.clone()))
+                                Box::new(NatExpr::Var(x))
                         ))
                 );
                 if expected != *statement {
-                    return Err(VerificationError::AddZeroWrong(pos));
+                    return Code::AddZeroWrong.at(pos);
                 }
             }
             Justification::AddSucc => {
@@ -671,15 +688,15 @@ impl ProofChecker {
                                         )),
                                         Box::new(NatExpr::Succ(
                                                 Box::new(NatExpr::Add(
-                                                        Box::new(NatExpr::Var(x.clone())),
-                                                        Box::new(NatExpr::Var(y.clone()))
+                                                        Box::new(NatExpr::Var(x)),
+                                                        Box::new(NatExpr::Var(y))
                                                 ))
                                         ))
                                 ))
                         ))
                 );
                 if expected != *statement {
-                    return Err(VerificationError::AddSuccWrong(pos));
+                    return Code::AddSuccWrong.at(pos);
                 }
             }
             Justification::MulZero => {
@@ -694,7 +711,7 @@ impl ProofChecker {
                         ))
                 );
                 if expected != *statement {
-                    return Err(VerificationError::MulZeroWrong(pos));
+                    return Code::MulZeroWrong.at(pos);
                 }
             }
             Justification::MulSucc => {
@@ -712,15 +729,15 @@ impl ProofChecker {
                                         Box::new(NatExpr::Add(
                                                 Box::new(NatExpr::Mul(
                                                         Box::new(NatExpr::Var(x.clone())),
-                                                        Box::new(NatExpr::Var(y.clone()))
+                                                        Box::new(NatExpr::Var(y))
                                                 )),
-                                                Box::new(NatExpr::Var(x.clone()))
+                                                Box::new(NatExpr::Var(x))
                                         ))
                                 ))
                         ))
                 );
                 if expected != *statement {
-                    return Err(VerificationError::AddSuccWrong(pos));
+                    return Code::AddSuccWrong.at(pos);
                 }
             }
             Justification::Induction => {
@@ -731,29 +748,29 @@ impl ProofChecker {
                             if let BoolExpr::Imp(hn, hsn) = &**imp {
                                 if let BoolExpr::All(concvar,conc) = &**concall {
                                     if indvar != concvar {
-                                        return Err(VerificationError::InductionWrongVar(pos));
+                                        return Code::InductionWrongVar.at(pos);
                                     }
                                     if hn != conc {
-                                        return Err(VerificationError::InductionWrongIndHyp(pos));
+                                        return Code::InductionWrongIndHyp.at(pos);
                                     }
                                     let mut subst = Some(NatExpr::Zero);
-                                    self.check_substitution(indvar, hn, h0, &mut subst, &[]).map_err(|_|VerificationError::InductionWrongBase(pos))?;
+                                    self.check_substitution(indvar, hn, h0, &mut subst, &[]).map_err(Code::InductionWrongBase.mapat(pos))?;
                                     let mut subst = Some(NatExpr::Succ(Box::new(NatExpr::Var(indvar.clone()))));
-                                    self.check_substitution(indvar, hn, hsn, &mut subst, &[]).map_err(|_|VerificationError::InductionWrongIndConc(pos))?;
+                                    self.check_substitution(indvar, hn, hsn, &mut subst, &[]).map_err(Code::InductionWrongIndConc.mapat(pos))?;
                                 } else {
-                                    return Err(VerificationError::InductionMalformed(pos));
+                                    return Code::InductionMalformed.at(pos);
                                 }
                             } else {
-                                return Err(VerificationError::InductionMalformed(pos));
+                                return Code::InductionMalformed.at(pos);
                             }
                         } else {
-                            return Err(VerificationError::InductionMalformed(pos));
+                            return Code::InductionMalformed.at(pos);
                         }
                     } else {
-                        return Err(VerificationError::InductionMalformed(pos));
+                        return Code::InductionMalformed.at(pos);
                     }
                 } else {
-                    return Err(VerificationError::InductionMalformed(pos));
+                    return Code::InductionMalformed.at(pos);
                 }
             }
         }
@@ -767,7 +784,7 @@ impl ProofChecker {
         match (lhs,rhs) {
             (BoolExpr::UserPred(lp,ls), BoolExpr::UserPred(rp,rs)) => {
                 if lp != rp || ls.len() != rs.len() {
-                    return Err(VerificationError::RenameMismatch(pos));
+                    return Code::RenameMismatch.at(pos);
                 }
 
                 for i in 0..ls.len() {
@@ -791,13 +808,13 @@ impl ProofChecker {
             }
             (BoolExpr::All(lx,l), BoolExpr::All(rx,r)) => {
                 if bound.iter().any(|(ly,ry)| lx==ly || rx==ry) {
-                    return Err(VerificationError::RenameBoundTwice(pos));  // This error shouldn't happen - should already have been checked
+                    return Code::RenameBoundTwice.at(pos);  // This error shouldn't happen - should already have been checked
                 }
                 let mut b2 = bound.to_vec();
                 b2.push((lx.clone(), rx.clone()));
                 self.check_rename(pos, l, r, &b2)?;
             }
-            _ => return Err(VerificationError::RenameMismatch(pos))
+            _ => return Code::RenameMismatch.at(pos)
         }
         Ok(())
     }
@@ -810,13 +827,10 @@ impl ProofChecker {
             (NatExpr::Var(lx), NatExpr::Var(rx)) => {
                 if bound.iter().any(|(ly,ry)| lx==ly && rx==ry) {
                     // this is ok - we expect to rename lx to rx.
-                } else if bound.iter().any(|(ly,ry)| lx==ly || rx==ry) {
-                    // this is not ok - one of the renaming variables occurs, and is not renamed
-                    // correctly
-                    return Err(VerificationError::RenameMismatch(pos));
-                } else if lx != rx {
-                    // Floating variables should not be renamed
-                    return Err(VerificationError::RenameMismatch(pos));
+                } else if bound.iter().any(|(ly,ry)| lx==ly || rx==ry) || lx != rx {
+                    // (1) this is not ok - one of the renaming variables occurs, and is not renamed correctly
+                    // (2) Floating variables should not be renamed
+                    return Code::RenameMismatch.at(pos);
                 }
             }
             (NatExpr::Zero, NatExpr::Zero) => { /* nothing to check */ }
@@ -827,7 +841,7 @@ impl ProofChecker {
                 self.check_rename_nat(pos, l0, r0, bound)?;
                 self.check_rename_nat(pos, l1, r1, bound)?;
             }
-            _ => return Err(VerificationError::RenameMismatch(pos))
+            _ => return Code::RenameMismatch.at(pos)
         }
         Ok(())
     }
@@ -952,7 +966,7 @@ impl ProofChecker {
         match (statement_lhs, statement_rhs) {
             (BoolExpr::UserPred(lp,ls), BoolExpr::UserPred(rp,rs)) => {
                 if lp != rp || ls.len() != rs.len() {
-                    return Err(VerificationError::EqualElimMismatchBool(pos, statement_lhs.clone(), statement_rhs.clone()));
+                    return Code::EqElimMismatchBool.at(pos);
                 }
 
                 for i in 0..ls.len() {
@@ -975,11 +989,11 @@ impl ProofChecker {
             }
             (BoolExpr::All(lx,l), BoolExpr::All(rx,r)) => {
                 if lx != rx {
-                    return Err(VerificationError::EqualElimMismatchBool(pos, statement_lhs.clone(), statement_rhs.clone()));
+                    return Code::EqElimMismatchBool.at(pos);
                 }
                 self.check_equal_elim(pos, lhs, rhs, l, r)?;
             }
-            _ => return Err(VerificationError::EqualElimMismatchBool(pos, statement_lhs.clone(), statement_rhs.clone()))
+            _ => return Code::EqElimMismatchBool.at(pos)
         }
 
         Ok(())
@@ -1007,7 +1021,7 @@ impl ProofChecker {
                 self.check_equal_elim_nat(pos, lhs, rhs, l0, r0)?;
                 self.check_equal_elim_nat(pos, lhs, rhs, l1, r1)?;
             }
-            _ => return Err(VerificationError::EqualElimMismatchNat(pos, expr_lhs.clone(), expr_rhs.clone()))
+            _ => return Code::EqElimMismatchNat.at(pos)
         }
 
         Ok(())
@@ -1024,7 +1038,7 @@ fn lookup_ebox(pos: Pos, previous_steps: &[ProcessedStep], id: StepId) -> Result
             }
         }
     }
-    Err(VerificationError::BadStepId(pos,id))
+    Code::BadStepId.at(pos)
 }
 
 fn lookup_abox(pos: Pos, previous_steps: &[ProcessedStep], id: StepId) -> Result<(&VarName,&BoolExpr), VerificationError> {
@@ -1035,7 +1049,7 @@ fn lookup_abox(pos: Pos, previous_steps: &[ProcessedStep], id: StepId) -> Result
             }
         }
     }
-    Err(VerificationError::BadStepId(pos,id))
+    Code::BadStepId.at(pos)
 }
 
 fn lookup_imp(pos: Pos, previous_steps: &[ProcessedStep], id: StepId) -> Result<(&BoolExpr,&BoolExpr), VerificationError> {
@@ -1046,7 +1060,7 @@ fn lookup_imp(pos: Pos, previous_steps: &[ProcessedStep], id: StepId) -> Result<
             }
         }
     }
-    Err(VerificationError::BadStepId(pos,id))
+    Code::BadStepId.at(pos)
 }
 
 fn lookup_claim(pos: Pos, previous_steps: &[ProcessedStep], id: StepId) -> Result<&BoolExpr, VerificationError> {
@@ -1057,7 +1071,7 @@ fn lookup_claim(pos: Pos, previous_steps: &[ProcessedStep], id: StepId) -> Resul
             }
         }
     }
-    Err(VerificationError::BadStepId(pos,id))
+    Code::BadStepId.at(pos)
 }
 
 #[derive(Clone,PartialEq,Eq)]

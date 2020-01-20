@@ -162,10 +162,8 @@ impl PredName {
                 if !is_lower_alphabetic(ch) && !is_upper_alphabetic(ch) {
                     return Err(NameError {});
                 }
-            } else {
-                if !is_lower_alphabetic(ch) && !is_upper_alphabetic(ch) && !is_digit(ch) && ch != '_' {
-                    return Err(NameError {});
-                }
+            } else if !is_lower_alphabetic(ch) && !is_upper_alphabetic(ch) && !is_digit(ch) && ch != '_' {
+                return Err(NameError {});
             }
             first = false;
         }
@@ -181,10 +179,8 @@ impl LemmaName {
                 if !is_lower_alphabetic(ch) && !is_upper_alphabetic(ch) {
                     return Err(NameError {});
                 }
-            } else {
-                if !is_lower_alphabetic(ch) && !is_upper_alphabetic(ch) && !is_digit(ch) && ch != '_' {
-                    return Err(NameError {});
-                }
+            } else if !is_lower_alphabetic(ch) && !is_upper_alphabetic(ch) && !is_digit(ch) && ch != '_' {
+                return Err(NameError {});
             }
             first = false;
         }
@@ -213,10 +209,8 @@ impl VarName {
                 if !is_lower_alphabetic(ch) {
                     return Err(NameError {});
                 }
-            } else {
-                if !is_lower_alphabetic(ch) && !is_digit(ch) && ch != '_' {
-                    return Err(NameError {});
-                }
+            } else if !is_lower_alphabetic(ch) && !is_digit(ch) && ch != '_' {
+                return Err(NameError {});
             }
             first = false;
         }

@@ -6,24 +6,20 @@ use nom::combinator::{all_consuming,value,opt,map,cut};
 use nom::error::ErrorKind;
 use nom::multi::{many0,many1,separated_list};
 use nom::sequence::{preceded,delimited,terminated};
+use crate::{ErrorType,ProcessingError};
 use crate::ast::*;
 
 #[derive(Debug)]
-pub enum ParseError {
-    Unexpected,
-    NotEOF,
-    BadName(Pos,String),
-    BadInt(Pos,String),
-    Nom(Pos, ErrorKind),
-    NomChain(Pos, ErrorKind, Box<ParseError>),
+pub struct ParseError {
+    pos: Pos
 }
 
 impl<'a> nom::error::ParseError<&'a str> for ParseError {
-    fn from_error_kind(input: &'a str, kind: ErrorKind) -> Self {
-        ParseError::Nom(input.len(), kind)
+    fn from_error_kind(input: &'a str, _kind: ErrorKind) -> Self {
+        ParseError { pos: input.len() }
     }
-    fn append(input: &'a str, kind: ErrorKind, other: Self) -> Self {
-        ParseError::NomChain(input.len(), kind, Box::new(other))
+    fn append(_input: &'a str, _kind: ErrorKind, other: Self) -> Self {
+        other
     }
 }
 
@@ -31,7 +27,7 @@ fn eof(input: &str) -> IResult<&str, (), ParseError> {
     if input.is_empty() {
         Ok((input,()))
     } else {
-        Err(nom::Err::Error(ParseError::NotEOF))
+        Err(nom::Err::Error(ParseError {pos: input.len() }))
     }
 }
 
@@ -60,15 +56,15 @@ fn word(input: &str) -> IResult<&str, &str, ParseError> {
     terminated(take_while1(|c|is_alphanumeric(c) || c == '_'),ws1)(input)
 }
 
-fn fail<T>(e: ParseError) -> IResult<&'static str, T, ParseError> {
-    Err(nom::Err::Failure(e))
+fn fail<T>(input: &str) -> IResult<&str, T, ParseError> {
+    Err(nom::Err::Failure(ParseError{pos: input.len()}))
 }
 
 fn pred_name(input: &str) -> IResult<&str, PredName, ParseError> {
     let (input,w) = word(input)?;
     match PredName::from_str(w) {
         Ok(name) => Ok((input,name)),
-        Err(_) => fail(ParseError::BadName(input.len(), w.to_string()))
+        Err(_) => fail(input)
     }
 }
 
@@ -76,7 +72,7 @@ fn lemma_name(input: &str) -> IResult<&str, LemmaName, ParseError> {
     let (input,w) = word(input)?;
     match LemmaName::from_str(w) {
         Ok(name) => Ok((input,name)),
-        Err(_) => fail(ParseError::BadName(input.len(), w.to_string()))
+        Err(_) => fail(input)
     }
 }
 
@@ -84,7 +80,7 @@ fn var_name(input: &str) -> IResult<&str, VarName, ParseError> {
     let (input,w) = word(input)?;
     match VarName::from_str(w) {
         Ok(name) => Ok((input,name)),
-        Err(_) => fail(ParseError::BadName(input.len(), w.to_string()))
+        Err(_) => fail(input)
     }
 }
 
@@ -97,7 +93,7 @@ fn stepid(input: &str) -> IResult<&str, StepId, ParseError> {
     let (input,_) = ws1(input)?;
     match digits.parse() {
         Ok(n) => Ok((input,n)),
-        Err(_) => fail(ParseError::BadInt(input.len(), digits.to_string()))
+        Err(_) => fail(input)
     }
 }
 
@@ -483,10 +479,10 @@ fn parse_script(input: &str) -> IResult<&str, Script, ParseError> {
     Ok((input,Script{items}))
 }
 
-pub fn parse(input: &str) -> Result<Script, ParseError> {
+pub fn parse(input: &str) -> Result<Script, ProcessingError> {
     match all_consuming(parse_script)(input) {
         Ok((_,script)) => Ok(script),
-        Err(nom::Err::Error(e)) | Err(nom::Err::Failure(e)) => Err(e),
-        Err(nom::Err::Incomplete(_)) => Err(ParseError::Unexpected),
+        Err(nom::Err::Error(e)) | Err(nom::Err::Failure(e)) => Err(ErrorType::Parse.at(e.pos, input)),
+        Err(nom::Err::Incomplete(_)) => Err(ErrorType::Unexpected.nowhere())
     }
 }
