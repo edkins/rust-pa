@@ -103,12 +103,6 @@ fn stepid(input: &str) -> IResult<&str, StepId, ParseError> {
 //
 /////////////
 
-fn fn_expr(input: &str) -> IResult<&str, NatExpr, ParseError> {
-    let (input,name) = pred_name(input)?;
-    let (input,args) = delimited(symbol("("), separated_list(symbol(","), nat_expr), symbol(")"))(input)?;
-    Ok((input,NatExpr::UserFunc(name,args)))
-}
-
 fn succ_expr(input: &str) -> IResult<&str, NatExpr, ParseError> {
     let (input,_) = keyword("S")(input)?;
     let (input,arg) = delimited(symbol("("), nat_expr, symbol(")"))(input)?;
@@ -124,7 +118,6 @@ fn nat_expr_inner(input: &str) -> IResult<&str, NatExpr, ParseError> {
     alt((
         value(NatExpr::Zero, keyword("0")),
         succ_expr,
-        fn_expr,
         var_expr,
         delimited(symbol("("), nat_expr, symbol(")")),
     ))(input)
@@ -348,13 +341,13 @@ fn justification(input: &str) -> IResult<&str, Justification, ParseError> {
 fn item_def(input: &str) -> IResult<&str, Item, ParseError> {
     let pos = input.len();
     let (input,_) = keyword("def")(input)?;
-    let (input,names) = cut(separated_list(symbol(","), pred_name))(input)?;
+    let (input,name) = cut(pred_name)(input)?;
     let (input,quants) = cut(opt(preceded(keyword("for"), var_name_list)))(input)?;
     let quants = quants.unwrap_or_else(Vec::new);
     let (input,rules) = cut(delimited(symbol("{"), separated_list(symbol(";"), bool_expr), symbol("}")))(input)?;
     Ok((input,Item::Def(ItemDef{
         pos,
-        names,
+        name,
         quants,
         rules,
     })))

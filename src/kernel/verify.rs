@@ -11,8 +11,6 @@ pub struct VerificationError {
 pub enum Code {
     // Errors in definitions
     AlreadyDefined,
-    NotDefiningAnything,
-    CanOnlyDefineOneSymbolAtOnce,
     DefMustBeIff,
     DefLhsVarMismatch,
     NoDefinitionRules,
@@ -154,13 +152,7 @@ fn any_equal<T:Eq+Clone>(xs: &[T]) -> Option<T> {
 
 impl ProofChecker {
     fn add_def(&mut self, def: &ItemDef) -> Result<(),VerificationError> {
-        if def.names.is_empty() {
-            return Code::NotDefiningAnything.at(def.pos);
-        }
-        if def.names.len() > 1 {
-            return Code::CanOnlyDefineOneSymbolAtOnce.at(def.pos);
-        }
-        let name = &def.names[0];
+        let name = &def.name;
         if any_equal(&def.quants).is_some() {
             return Code::QuantifiersHaveSameName.at(def.pos);
         }
@@ -254,7 +246,6 @@ impl ProofChecker {
                 self.check_natexpr(pos, a, bound)?;
                 self.check_natexpr(pos, b, bound)?;
             }
-            _ => return Code::UnexpectedHighLevelNatExpr.at(pos)
         }
         Ok(())
     }
@@ -948,7 +939,6 @@ impl ProofChecker {
                 self.check_no_occurences_of(a, blacklist)?;
                 self.check_no_occurences_of(b, blacklist)?;
             }
-            _ => return Err(SubstitutionError{})
         }
         Ok(())
     }

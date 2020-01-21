@@ -26,7 +26,7 @@ pub struct LemmaName {
 
 pub struct ItemDef {
     pub pos: Pos,
-    pub names: Vec<PredName>,
+    pub name: PredName,
     pub quants: Vec<VarName>,
     pub rules: Vec<BoolExpr>,
 }
@@ -52,8 +52,6 @@ pub enum NatExpr {
     Succ(Box<NatExpr>),
     Add(Box<NatExpr>,Box<NatExpr>),
     Mul(Box<NatExpr>,Box<NatExpr>),
-    // Higher-level extensions
-    UserFunc(PredName, Vec<NatExpr>),
 }
 
 pub struct ItemLemma {
