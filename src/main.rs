@@ -3,7 +3,10 @@ use clap::clap_app;
 use crate::kernel::ast::Pos;
 use crate::kernel::parse::parse;
 use crate::kernel::verify::{verify,Code};
+use crate::high_level::parse::high_level_parse;
+use crate::high_level::translate::translate;
 
+mod high_level;
 mod kernel;
 
 #[derive(Debug)]
@@ -15,6 +18,7 @@ pub struct ProcessingError {
 #[derive(Debug)]
 pub enum ErrorType {
     Verification(Code),
+    Translation(crate::high_level::translate::ErrorType),
     Parse,
     IO(std::io::Error),
     TestsFailed(Vec<String>),
@@ -57,6 +61,14 @@ fn process_kernel(filename: &str) -> Result<(),ProcessingError> {
     Ok(())
 }
 
+fn process_high_level(filename: &str) -> Result<(),ProcessingError> {
+    let text = read_to_string(filename)?;
+    let hscript = high_level_parse(&text).map_err(|e|ErrorType::Parse.at(e.pos, &text))?;
+    let script = translate(&hscript).map_err(|e|ErrorType::Translation(e.typ).at(e.pos, &text))?;
+    verify(&script).map_err(|e|ErrorType::Verification(e.code).at(e.pos, &text))?;
+    Ok(())
+}
+
 fn read_dir_sorted(dir: &str) -> Result<Vec<String>,ProcessingError> {
     let mut result = vec![];
     for entry in read_dir(dir)? {
@@ -89,6 +101,15 @@ fn run_tests() -> Result<(),ProcessingError> {
             Err(_) => println!("{:48} FAIL as expected", filename)
         }
     }
+    for filename in &read_dir_sorted("test/good")? {
+        match process_high_level(filename) {
+            Ok(()) => println!("{:48} PASS", filename),
+            Err(e) => {
+                println!("{:48} !!!! {:?}", filename, e);
+                failures.push(filename.to_string());
+            }
+        }
+    }
 
     if !failures.is_empty() {
         return Err(ErrorType::TestsFailed(failures).nowhere())
@@ -113,7 +134,7 @@ fn main() -> Result<(),ProcessingError> {
         if matches.is_present("KERNEL") {
             process_kernel(filename)?;
         } else {
-            panic!("High level checking not implemented yet");
+            process_high_level(filename)?;
         }
     }
     

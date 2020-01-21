@@ -1,0 +1,8 @@
+lemma zero_add : forall x, 0 + x = x {
+    0 + 0 = 0;
+    induction x, 0 + x = x {
+        forall y, 0 + S(y) = S(0 + y);
+        0 + S(x) = S(0 + x);
+        0 + S(x) = S(x);
+    }
+}
