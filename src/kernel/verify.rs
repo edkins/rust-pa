@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use crate::ast::{Script,Pos,VarName,PredName,BoolExpr,NatExpr,ItemDef,Item,ItemLemma,LemmaName,StepId,Justification,Step};
+use crate::kernel::ast::{Script,Pos,VarName,PredName,BoolExpr,NatExpr,ItemDef,Item,ItemLemma,LemmaName,StepId,Justification,Step};
 
 #[derive(Debug)]
 pub struct VerificationError {

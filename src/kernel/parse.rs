@@ -6,12 +6,11 @@ use nom::combinator::{all_consuming,value,opt,map,cut};
 use nom::error::ErrorKind;
 use nom::multi::{many0,many1,separated_list};
 use nom::sequence::{preceded,delimited,terminated};
-use crate::{ErrorType,ProcessingError};
-use crate::ast::*;
+use crate::kernel::ast::*;
 
 #[derive(Debug)]
 pub struct ParseError {
-    pos: Pos
+    pub pos: Pos
 }
 
 impl<'a> nom::error::ParseError<&'a str> for ParseError {
@@ -482,10 +481,10 @@ fn parse_script(input: &str) -> IResult<&str, Script, ParseError> {
     Ok((input,Script{items}))
 }
 
-pub fn parse(input: &str) -> Result<Script, ProcessingError> {
+pub fn parse(input: &str) -> Result<Script, ParseError> {
     match all_consuming(parse_script)(input) {
         Ok((_,script)) => Ok(script),
-        Err(nom::Err::Error(e)) | Err(nom::Err::Failure(e)) => Err(ErrorType::Parse.at(e.pos, input)),
-        Err(nom::Err::Incomplete(_)) => Err(ErrorType::Unexpected.nowhere())
+        Err(nom::Err::Error(e)) | Err(nom::Err::Failure(e)) => Err(e),
+        Err(nom::Err::Incomplete(_)) => Err(ParseError{pos:0})
     }
 }

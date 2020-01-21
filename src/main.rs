@@ -1,12 +1,10 @@
 use std::fs::{read_dir,read_to_string};
 use clap::clap_app;
-use crate::ast::Pos;
-use crate::parse::parse;
-use crate::verify::{verify,Code};
+use crate::kernel::ast::Pos;
+use crate::kernel::parse::parse;
+use crate::kernel::verify::{verify,Code};
 
-mod ast;
-mod parse;
-mod verify;
+mod kernel;
 
 #[derive(Debug)]
 pub struct ProcessingError {
@@ -52,9 +50,9 @@ impl From<std::io::Error> for ProcessingError {
     }
 }
 
-fn process(filename: &str) -> Result<(),ProcessingError> {
+fn process_kernel(filename: &str) -> Result<(),ProcessingError> {
     let text = read_to_string(filename)?;
-    let script = parse(&text)?;
+    let script = parse(&text).map_err(|e|ErrorType::Parse.at(e.pos, &text))?;
     verify(&script).map_err(|e|ErrorType::Verification(e.code).at(e.pos, &text))?;
     Ok(())
 }
@@ -74,7 +72,7 @@ fn read_dir_sorted(dir: &str) -> Result<Vec<String>,ProcessingError> {
 fn run_tests() -> Result<(),ProcessingError> {
     let mut failures = vec![];
     for filename in &read_dir_sorted("test/kernel_good")? {
-        match process(filename) {
+        match process_kernel(filename) {
             Ok(()) => println!("{:48} PASS", filename),
             Err(e) => {
                 println!("{:48} !!!! {:?}", filename, e);
@@ -83,7 +81,7 @@ fn run_tests() -> Result<(),ProcessingError> {
         }
     }
     for filename in &read_dir_sorted("test/kernel_bad")? {
-        match process(filename) {
+        match process_kernel(filename) {
             Ok(()) => {
                 println!("{:48} !!!!", filename);
                 failures.push(filename.to_string());
@@ -104,14 +102,19 @@ fn main() -> Result<(),ProcessingError> {
             (version: "0.1")
             (author: "Giles Edkins")
             (@arg INPUT: "Input file to validate")
-            (@arg TEST: --test "Run tests, expecting test/good to pass and test/bad to fail")
+            (@arg TEST: --test "Run tests, expecting test/kernel_good to pass and test/kernel_bad to fail")
+            (@arg KERNEL: --kernel "Validate input file in kernel mode, without high-level checking")
     ).get_matches();
 
     if matches.is_present("TEST") {
         run_tests()?;
     } else {
         let filename = matches.value_of("INPUT").ok_or_else(||ErrorType::BadFileName.nowhere())?;
-        process(filename)?;
+        if matches.is_present("KERNEL") {
+            process_kernel(filename)?;
+        } else {
+            panic!("High level checking not implemented yet");
+        }
     }
     
     Ok(())
