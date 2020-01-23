@@ -53,12 +53,14 @@ pub struct HItemDef {
 pub enum HType {
     Nat,
     Bool,
+    Unchecked,     // this means the type checker hasn't been run yet
+    Temp(usize),   // temporarily used by type checker to annotate things
 }
 
 #[derive(PartialEq,Eq,Clone,Debug)]
 pub struct HExpr {
     pub pos: HPos,
-    pub typ: Option<HType>, // None means unknown
+    pub typ: HType,
     pub name: HName,
     pub args: Vec<HExpr>,   // for quantifiers, first arg is the quantified variable and is treated specially
 }

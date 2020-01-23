@@ -1,4 +1,4 @@
-use crate::high_level::ast::{HBuiltin,HType};
+use crate::high_level::ast::{HBuiltin,HType,HName};
 
 impl HBuiltin {
     pub fn arity(&self) -> usize {
@@ -6,6 +6,13 @@ impl HBuiltin {
             HBuiltin::False => 0,
             HBuiltin::Not | HBuiltin::Succ => 1,
             HBuiltin::Eq | HBuiltin::And | HBuiltin::Or | HBuiltin::Imp | HBuiltin::Iff | HBuiltin::All | HBuiltin::Exists | HBuiltin::Add | HBuiltin::Mul => 2
+        }
+    }
+    pub fn is_quant(&self) -> bool {
+        match self {
+            HBuiltin::False | HBuiltin::Not | HBuiltin::Succ |
+            HBuiltin::Eq | HBuiltin::And | HBuiltin::Or | HBuiltin::Imp | HBuiltin::Iff | HBuiltin::Add | HBuiltin::Mul => false,
+            HBuiltin::All | HBuiltin::Exists => true, 
         }
     }
 }
@@ -21,6 +28,15 @@ impl HType {
         match self {
             HType::Nat => true,
             HType::Bool => false
+        }
+    }
+}
+
+impl HName {
+    pub fn is_quant(&self) -> bool {
+        match self {
+            HName::UserFunc(_) | HName::UserVar(_) | HName::Num(_) => false,
+            HName::Builtin(b) => b.is_quant()
         }
     }
 }
