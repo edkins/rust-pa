@@ -117,7 +117,7 @@ fn step(step: &HStep) -> Result<Step,TranslationError> {
                 return ErrorType::ContentsShouldBeMissing.at(pos);
             }
             Ok(Step::Claim(StepClaim {
-                pos: pos,
+                pos,
                 id,
                 statement: stmt(req(pos, &step.statement)?)?,
                 justification: justification(req(pos, &step.justification)?)?
@@ -168,7 +168,7 @@ fn step(step: &HStep) -> Result<Step,TranslationError> {
 fn nat(expr: &HExpr) -> Result<NatExpr,TranslationError> {
     let pos = expr.pos;
     let args = &expr.args;
-    if expr.typ.is_none() || !expr.typ.as_ref().unwrap().maps_to_nat() {
+    if !expr.typ.maps_to_nat() {
         return ErrorType::NatExprIsNotNat.at(pos);
     }
     match &expr.name {
@@ -204,7 +204,7 @@ fn nat(expr: &HExpr) -> Result<NatExpr,TranslationError> {
 fn stmt(expr: &HExpr) -> Result<BoolExpr,TranslationError> {
     let pos = expr.pos;
     let args = &expr.args;
-    if expr.typ.is_none() || !expr.typ.as_ref().unwrap().maps_to_bool() {
+    if !expr.typ.maps_to_bool() {
         return ErrorType::BoolExprIsNotBool.at(pos);
     }
     match &expr.name {

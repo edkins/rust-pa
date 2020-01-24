@@ -54,7 +54,6 @@ pub enum HType {
     Nat,
     Bool,
     Unchecked,     // this means the type checker hasn't been run yet
-    Temp(usize),   // temporarily used by type checker to annotate things
 }
 
 #[derive(PartialEq,Eq,Clone,Debug)]
@@ -69,7 +68,7 @@ impl HExpr {
     pub fn num(pos: HPos, n: BigUint) -> Self {
         HExpr {
             pos,
-            typ: None,   // ok, it's probably Nat. But the type checker is a separate pass.
+            typ: HType::Unchecked,   // ok, it's probably Nat. But the type checker is a separate pass.
             name: HName::Num(n),
             args: vec![],
         }
@@ -85,7 +84,7 @@ impl HExpr {
         };
         HExpr {
             pos,
-            typ: None,
+            typ: HType::Unchecked,
             name,
             args,
         }
@@ -96,7 +95,7 @@ impl HExpr {
     pub fn var(pos: HPos, name: &str) -> Self {
         HExpr {
             pos,
-            typ: None,
+            typ: HType::Unchecked,
             name: HName::UserVar(name.to_string()),
             args: vec![]
         }
@@ -104,7 +103,7 @@ impl HExpr {
     pub fn builtin1(pos: HPos, name: HBuiltin, a: HExpr) -> Self {
         HExpr {
             pos,
-            typ: None,
+            typ: HType::Unchecked,
             name: HName::Builtin(name),
             args: vec![a]
         }
@@ -112,7 +111,7 @@ impl HExpr {
     pub fn builtin2(pos: HPos, name: HBuiltin, a: HExpr, b: HExpr) -> Self {
         HExpr {
             pos,
-            typ: None,
+            typ: HType::Unchecked,
             name: HName::Builtin(name),
             args: vec![a,b]
         }
@@ -120,7 +119,7 @@ impl HExpr {
     pub fn quant(pos: HPos, name: HBuiltin, x: &str, expr: HExpr) -> Self {
         HExpr {
             pos,
-            typ: None,
+            typ: HType::Unchecked,
             name: HName::Builtin(name),
             args: vec![HExpr::var(pos,x),expr]
         }
