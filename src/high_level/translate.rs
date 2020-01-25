@@ -25,6 +25,8 @@ pub enum ErrorType {
     QuantUnexpected,
     BadName,
     ContentsShouldBeMissing,
+    WrongNumberOfStepsForRule,
+    BadLemmaName,
 }
 
 impl ErrorType {
@@ -104,8 +106,29 @@ fn steps(steps: &[HStep]) -> Result<Vec<Step>,TranslationError> {
     steps.iter().map(step).collect()
 }
 
-fn justification(justification: &HJustification) -> Result<Justification,TranslationError> {
-    panic!(); //TODO
+fn justification(pos: HPos, justification: &HJustification) -> Result<Justification,TranslationError> {
+    Ok(match justification {
+        HJustification::Axiom(ax) => {
+            match ax {
+                HAxiom::ZeroIsNotSucc => Justification::ZeroIsNotSucc,
+                HAxiom::SuccInj => Justification::SuccInj,
+                HAxiom::AddZero => Justification::AddZero,
+                HAxiom::AddSucc => Justification::AddSucc,
+                HAxiom::MulZero => Justification::MulZero,
+                HAxiom::MulSucc => Justification::MulSucc,
+            }
+        }
+        HJustification::Lemma(lem) => Justification::Lemma(LemmaName::from_str(lem).map_err(ErrorType::BadLemmaName.m(pos))?),
+        HJustification::Rule(rule,step_ids) => {
+            if rule.step_count() != step_ids.len() {
+                return ErrorType::WrongNumberOfStepsForRule.at(pos);
+            }
+            match rule {
+                HRule::AllElim => Justification::AllElim(step_ids[0]),
+                HRule::Rename => Justification::Rename(step_ids[0]),
+            }
+        }
+    })
 }
 
 fn step(step: &HStep) -> Result<Step,TranslationError> {
@@ -120,7 +143,7 @@ fn step(step: &HStep) -> Result<Step,TranslationError> {
                 pos,
                 id,
                 statement: stmt(req(pos, &step.statement)?)?,
-                justification: justification(req(pos, &step.justification)?)?
+                justification: justification(pos, req(pos, &step.justification)?)?
             }))
         }
         HStepType::Induction => ErrorType::InductionWasNotSquashed.at(pos),

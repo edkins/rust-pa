@@ -1,4 +1,5 @@
-use crate::high_level::ast::{HBuiltin,HType,HName,HStepType};
+use num_traits::Zero;
+use crate::high_level::ast::{HBuiltin,HType,HName,HStepType,HAxiom,HExpr,HRule};
 
 #[derive(Clone,Debug)]
 pub struct FuncType {
@@ -89,6 +90,135 @@ impl HStepType {
         match self {
             HStepType::Claim => false,
             HStepType::Given | HStepType::Induction => true,
+        }
+    }
+}
+
+
+impl HAxiom {
+    pub fn statement(&self) -> HExpr {
+        match self {
+            HAxiom::ZeroIsNotSucc =>
+                forall(x(),not(eq(zero(),s(x())))),
+            HAxiom::SuccInj =>
+                forall(x(), forall(y(),
+                    imp(eq(s(x()), s(y())), eq(x(), y())))),
+            HAxiom::AddZero =>
+                forall(x(), eq(add(x(),zero()), x())),
+            HAxiom::AddSucc =>
+                forall(x(), forall(y(),
+                    eq(add(x(),s(y())), s(add(x(),y()))))),
+            HAxiom::MulZero =>
+                forall(x(), eq(mul(x(),zero()), zero())),
+            HAxiom::MulSucc =>
+                forall(x(), forall(y(),
+                    eq(mul(x(),s(y())), add(mul(x(),y()), x())))),
+        }
+    }
+    pub fn all() -> Vec<Self> {
+        vec![HAxiom::ZeroIsNotSucc,
+            HAxiom::SuccInj,
+            HAxiom::AddZero,
+            HAxiom::AddSucc,
+            HAxiom::MulZero,
+            HAxiom::MulSucc]
+    }
+}
+
+fn x() -> HExpr {
+    HExpr {
+        pos: 0,
+        typ: HType::Nat,
+        name: HName::UserVar("x".to_string()),
+        args: vec![]
+    }
+}
+
+fn y() -> HExpr {
+    HExpr {
+        pos: 0,
+        typ: HType::Nat,
+        name: HName::UserVar("y".to_string()),
+        args: vec![]
+    }
+}
+
+fn zero() -> HExpr {
+    HExpr {
+        pos: 0,
+        typ: HType::Nat,
+        name: HName::Num(Zero::zero()),
+        args: vec![]
+    }
+}
+
+fn s(n: HExpr) -> HExpr {
+    HExpr {
+        pos: 0,
+        typ: HType::Nat,
+        name: HName::Builtin(HBuiltin::Succ),
+        args: vec![n]
+    }
+}
+
+fn add(m: HExpr, n: HExpr) -> HExpr {
+    HExpr {
+        pos: 0,
+        typ: HType::Nat,
+        name: HName::Builtin(HBuiltin::Add),
+        args: vec![m,n]
+    }
+}
+
+fn mul(m: HExpr, n: HExpr) -> HExpr {
+    HExpr {
+        pos: 0,
+        typ: HType::Nat,
+        name: HName::Builtin(HBuiltin::Mul),
+        args: vec![m,n]
+    }
+}
+
+fn eq(m: HExpr, n: HExpr) -> HExpr {
+    HExpr {
+        pos: 0,
+        typ: HType::Bool,
+        name: HName::Builtin(HBuiltin::Eq),
+        args: vec![m,n]
+    }
+}
+
+fn not(p: HExpr) -> HExpr {
+    HExpr {
+        pos: 0,
+        typ: HType::Bool,
+        name: HName::Builtin(HBuiltin::Not),
+        args: vec![p]
+    }
+}
+
+fn imp(p: HExpr, q: HExpr) -> HExpr {
+    HExpr {
+        pos: 0,
+        typ: HType::Bool,
+        name: HName::Builtin(HBuiltin::Imp),
+        args: vec![p,q]
+    }
+}
+
+fn forall(x: HExpr, e: HExpr) -> HExpr {
+    HExpr {
+        pos: 0,
+        typ: HType::Bool,
+        name: HName::Builtin(HBuiltin::All),
+        args: vec![x,e]
+    }
+}
+
+impl HRule {
+    pub fn step_count(&self) -> usize {
+        match self {
+            HRule::AllElim | HRule::Rename => 1
         }
     }
 }

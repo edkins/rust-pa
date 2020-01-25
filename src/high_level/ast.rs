@@ -10,7 +10,7 @@ pub type HFuncName = String;
 pub type HVarName = String;
 pub type HLemmaName = String;
 
-#[derive(Clone,PartialEq,Eq,Debug)]
+#[derive(Clone,PartialEq,Eq,Debug,Hash)]
 pub enum HName {
     UserFunc(HFuncName),
     UserVar(HVarName),
@@ -18,7 +18,7 @@ pub enum HName {
     Num(BigUint),
 }
 
-#[derive(Clone,PartialEq,Eq,Debug)]
+#[derive(Clone,PartialEq,Eq,Debug,Hash)]
 pub enum HBuiltin {
     Eq,
     False,
@@ -162,4 +162,23 @@ pub enum HIntro {
 
 #[derive(PartialEq,Eq,Clone,Debug)]
 pub enum HJustification {
+    Axiom(HAxiom),
+    Lemma(HLemmaName),
+    Rule(HRule, Vec<HStepId>),
+}
+
+#[derive(PartialEq,Eq,Clone,Debug)]
+pub enum HRule {
+    AllElim,
+    Rename,
+}
+
+#[derive(PartialEq,Eq,Clone,Debug,Hash)]
+pub enum HAxiom {
+    ZeroIsNotSucc,
+    SuccInj,
+    AddZero,
+    AddSucc,
+    MulZero,
+    MulSucc,
 }

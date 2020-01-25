@@ -3,6 +3,7 @@ use clap::clap_app;
 use crate::kernel::ast::Pos;
 use crate::kernel::parse::parse;
 use crate::kernel::verify::{verify,Code};
+use crate::high_level::guesswork::guess_justifications;
 use crate::high_level::parse::high_level_parse;
 use crate::high_level::translate::translate;
 use crate::high_level::type_check::type_check;
@@ -20,6 +21,7 @@ pub struct ProcessingError {
 pub enum ErrorType {
     Verification(Code),
     Translation(crate::high_level::translate::ErrorType),
+    Guess(crate::high_level::guesswork::ErrorCode),
     TypeCheck(crate::high_level::type_check::ErrorCode),
     Parse,
     IO(std::io::Error),
@@ -67,6 +69,7 @@ fn process_high_level(filename: &str) -> Result<(),ProcessingError> {
     let text = read_to_string(filename)?;
     let mut hscript = high_level_parse(&text).map_err(|e|ErrorType::Parse.at(e.pos, &text))?;
     type_check(&mut hscript).map_err(|e|ErrorType::TypeCheck(e.code).at(e.pos, &text))?;
+    guess_justifications(&mut hscript).map_err(|e|ErrorType::Guess(e.code).at(e.pos, &text))?;
     let script = translate(&hscript).map_err(|e|ErrorType::Translation(e.typ).at(e.pos, &text))?;
     verify(&script).map_err(|e|ErrorType::Verification(e.code).at(e.pos, &text))?;
     Ok(())
