@@ -871,7 +871,8 @@ impl ProofChecker {
                 self.check_substitution(name, l0, r0, subst, bound)?;
                 self.check_substitution(name, l1, r1, subst, bound)?;
             }
-            (BoolExpr::All(lx,l), BoolExpr::All(rx,r)) => {
+            (BoolExpr::All(lx,l), BoolExpr::All(rx,r)) |
+            (BoolExpr::Exists(lx,l), BoolExpr::Exists(rx,r)) => {
                 if lx != rx {
                     return Err(SubstitutionError{});
                 }
@@ -977,7 +978,8 @@ impl ProofChecker {
                 self.check_equal_elim(pos, lhs, rhs, l0, r0)?;
                 self.check_equal_elim(pos, lhs, rhs, l1, r1)?;
             }
-            (BoolExpr::All(lx,l), BoolExpr::All(rx,r)) => {
+            (BoolExpr::All(lx,l), BoolExpr::All(rx,r)) |
+            (BoolExpr::Exists(lx,l), BoolExpr::Exists(rx,r)) => {
                 if lx != rx {
                     return Code::EqElimMismatchBool.at(pos);
                 }
