@@ -1,3 +1,4 @@
+use log::trace;
 use std::collections::HashMap;
 use crate::high_level::ast::*;
 use crate::high_level::tree_matcher::{TreeMatcher,TreeMatcherSource,TreeMatcherAnswer};
@@ -62,18 +63,16 @@ impl Guesser {
                 step_type: step.step_type.clone(),
                 justification: None,
             });
-        } else {
-            if let Some(stmt) = &step.statement {
-                let matches = matcher.match_expr(stmt);
-                if matches.is_empty() {
-                    return ErrorCode::CouldNotGuess.at(step.pos);
-                }
-
-                let stmt_id = step.id.ok_or_else(||ErrorCode::MissingId.error_at(pos))?;
-                self.get_to(pos, stmt_id, result, stmt, &matches[0])?;
-            } else {
-                return ErrorCode::ClaimHasNoStatement.at(step.pos);
+        } else if let Some(stmt) = &step.statement {
+            let matches = matcher.match_expr(stmt);
+            if matches.is_empty() {
+                return ErrorCode::CouldNotGuess.at(step.pos);
             }
+
+            let stmt_id = step.id.ok_or_else(||ErrorCode::MissingId.error_at(pos))?;
+            self.get_to(pos, stmt_id, result, stmt, &matches[0])?;
+        } else {
+            return ErrorCode::ClaimHasNoStatement.at(step.pos);
         }
         Ok(())
     }
@@ -264,6 +263,7 @@ fn add_axiom_payloads(matcher: &mut TreeMatcher) -> Result<(),GuessError> {
 pub fn guess_justifications(script: &mut HScript) -> Result<(),GuessError> {
     let mut matcher = TreeMatcher::default();
     let mut lemmas = HashMap::new();
+    trace!("Adding axioms to tree matcher");
     add_axiom_payloads(&mut matcher)?;
     for item in script.items.iter_mut() {
         if let HItem::Lemma(lemma) = item {

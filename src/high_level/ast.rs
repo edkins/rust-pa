@@ -10,7 +10,7 @@ pub type HFuncName = String;
 pub type HVarName = String;
 pub type HLemmaName = String;
 
-#[derive(Clone,PartialEq,Eq,Debug,Hash)]
+#[derive(Clone,PartialEq,Eq,Debug,Hash,PartialOrd,Ord)]
 pub enum HName {
     UserFunc(HFuncName),
     UserVar(HVarName),
@@ -18,7 +18,7 @@ pub enum HName {
     Num(BigUint),
 }
 
-#[derive(Clone,PartialEq,Eq,Debug,Hash)]
+#[derive(Clone,PartialEq,Eq,Debug,Hash,PartialOrd,Ord)]
 pub enum HBuiltin {
     Eq,
     False,
@@ -35,13 +35,13 @@ pub enum HBuiltin {
     Mul,
 }
 
-#[derive(Clone,PartialEq,Eq,Debug)]
+#[derive(Clone,Debug)]
 pub enum HItem {
     Def(HItemDef),
     Lemma(HItemLemma),
 }
 
-#[derive(Clone,PartialEq,Eq,Debug)]
+#[derive(Clone,Debug)]
 pub struct HItemDef {
     pub pos: HPos,
     pub names: Vec<HFuncName>,
@@ -56,7 +56,7 @@ pub enum HType {
     Unchecked,     // this means the type checker hasn't been run yet
 }
 
-#[derive(PartialEq,Eq,Clone,Debug)]
+#[derive(Clone,Debug)]
 pub struct HExpr {
     pub pos: HPos,
     pub typ: HType,
@@ -126,7 +126,7 @@ impl HExpr {
     }
 }
 
-#[derive(PartialEq,Eq,Clone,Debug)]
+#[derive(Clone,Debug)]
 pub struct HItemLemma {
     pub pos: HPos,
     pub name: HLemmaName,
@@ -134,7 +134,7 @@ pub struct HItemLemma {
     pub proof: Vec<HStep>
 }
 
-#[derive(PartialEq,Eq,Clone,Debug)]
+#[derive(Clone,Debug)]
 pub struct HStep {
     pub pos: HPos,
     pub id: Option<HStepId>,
@@ -154,13 +154,13 @@ pub enum HStepType {
 
 pub type HStepId = usize;
 
-#[derive(PartialEq,Eq,Clone,Debug)]
+#[derive(Clone,Debug)]
 pub enum HIntro {
     Var(HVarName),
     Stmt(HExpr,Option<HStepId>),
 }
 
-#[derive(PartialEq,Eq,Clone,Debug)]
+#[derive(Clone,Debug)]
 pub enum HJustification {
     Axiom(HAxiom),
     Lemma(HLemmaName),
@@ -181,4 +181,27 @@ pub enum HAxiom {
     AddSucc,
     MulZero,
     MulSucc,
+}
+
+impl std::fmt::Display for HExpr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self.name {
+            HName::UserFunc(x) | HName::UserVar(x) => write!(f, "{}", x)?,
+            HName::Builtin(b) => write!(f, "{:?}", b)?,
+            HName::Num(n) => write!(f, "{}", n)?,
+        }
+        if !self.args.is_empty() {
+            write!(f, "(")?;
+            let mut first = true;
+            for arg in &self.args {
+                if !first {
+                    write!(f, ",")?;
+                }
+                first = false;
+                arg.fmt(f)?;
+            }
+            write!(f, ")")?;
+        }
+        Ok(())
+    }
 }

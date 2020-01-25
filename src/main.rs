@@ -58,6 +58,12 @@ impl From<std::io::Error> for ProcessingError {
     }
 }
 
+impl From<log::SetLoggerError> for ProcessingError {
+    fn from(_: log::SetLoggerError) -> Self {
+        ErrorType::Unexpected.nowhere()
+    }
+}
+
 fn process_kernel(filename: &str) -> Result<(),ProcessingError> {
     let text = read_to_string(filename)?;
     let script = parse(&text).map_err(|e|ErrorType::Parse.at(e.pos, &text))?;
@@ -131,7 +137,16 @@ fn main() -> Result<(),ProcessingError> {
             (@arg INPUT: "Input file to validate")
             (@arg TEST: --test "Run tests, expecting test/kernel_good to pass and test/kernel_bad to fail")
             (@arg KERNEL: --kernel "Validate input file in kernel mode, without high-level checking")
+            (@arg QUIET: -q "Disables logging output")
+            (@arg VERBOSITY: -v +multiple "Set verbosity level of logging")
     ).get_matches();
+
+    stderrlog::new()
+        .module(module_path!())
+        .quiet(matches.is_present("QUIET"))
+        .verbosity(matches.occurrences_of("VERBOSITY") as usize)
+        .timestamp(stderrlog::Timestamp::Millisecond)
+        .init()?;
 
     if matches.is_present("TEST") {
         run_tests()?;

@@ -1,3 +1,4 @@
+use log::trace;
 use std::collections::{HashMap,VecDeque};
 use crate::high_level::ast::{HLemmaName,HExpr,HName,HVarName,HPos,HIntro,HAxiom};
 use crate::high_level::guesswork::{GuessError,ErrorCode};
@@ -31,7 +32,7 @@ pub struct TreeMatcher {
     payload: Vec<TreeMatcherPayload>,
 }
 
-#[derive(PartialEq,Eq,Hash,Clone)]
+#[derive(PartialEq,Eq,Hash,Clone,PartialOrd,Ord,Debug)]
 enum MatcherStep {
     Exact(HName,usize),
     Push,
@@ -47,7 +48,7 @@ impl MatcherStep {
     }
 }
 
-#[derive(Clone,PartialEq,Eq,Hash)]
+#[derive(Clone,PartialEq,Eq,Hash,Debug)]
 pub enum TreeMatcherSource {
     Lemma(HLemmaName),
     Axiom(HAxiom),
@@ -118,18 +119,24 @@ impl<'a,'b> Matching<'a,'b> {
     fn add_retrieves_matching(&self, result: &mut Vec<Match<'b>>, expr: &HExpr) {
         for (i,var) in self.vars.iter().enumerate() {
             if let Some(next) = self.matcher.map.get(&MatcherStep::Retrieve(i)) {
-                if expr == *var {
+                if expr.eq(var) {
+                    trace!("Adding retrieve match {}", i);
                     result.push(Match{next,push:false,visit_children:false});
+                } else {
+                    trace!("Sorry, no retrieve match for {}. {} vs {}", i, expr, var);
                 }
             }
         }
     }
     fn get_matches(&self, expr: &HExpr) -> Vec<Match<'b>> {
         let mut result = vec![];
+        trace!("Get matches: expr = {}", expr);
         if let Some(next) = self.get_exact(&expr.name, expr.args.len()) {
+            trace!("Adding exact match {:?}", expr.name);
             result.push(Match{next,push:false,visit_children:true});
         }
         if let Some(next) = self.get_push() {
+            trace!("Adding push match");
             result.push(Match{next,push:true,visit_children:false});
         }
         self.add_retrieves_matching(&mut result, expr);
@@ -152,19 +159,25 @@ impl<'a,'b> Matching<'a,'b> {
         loop {
             match self.buffer.pop_front() {
                 None => {
+                    trace!("match_recursive: end: {} payloads", self.matcher.payload.len());
                     result.extend(self.matcher.payload.iter().map(|p|p.with_vars(&self.vars)));
+                    break;
                 }
                 Some(expr) => {
                     let mut matches = self.get_matches(expr);
 
                     if matches.is_empty() {
+                        trace!("match_recursive: failed");
                         break;
                     } else {
+                        trace!("match_recursive: nonempty");
                         for mat in matches.drain(1..) {
                             let mut matching = self.clone();
                             matching.apply(mat, expr);
+                            trace!("match_recursive: recursive call");
                             matching.match_recursive(result);
                         }
+                        trace!("match_recursive: continuing");
                         self.apply(matches.remove(0), expr);
                     }
                 }
@@ -175,12 +188,42 @@ impl<'a,'b> Matching<'a,'b> {
 
 impl TreeMatcher {
     pub fn match_expr(&self, e: &HExpr) -> Vec<TreeMatcherAnswer> {
+        trace!("Matching expr against tree matcher:\n{}", self.dump());
         let mut buffer = VecDeque::new();
         buffer.push_back(e);
         let mut matching = Matching{matcher:self, vars:vec![], buffer};
         let mut result = vec![];
         matching.match_recursive(&mut result);
         result
+    }
+
+    fn dump(&self) -> String {
+        let mut result = String::new();
+        self.dump_to(&mut result, "");
+        result
+    }
+    fn dump_to(&self, result: &mut String, indent: &str) {
+        let mut stack = vec![self];
+        loop {
+            if let Some(top) = stack.pop() {
+                let mut keys:Vec<_> = top.map.keys().collect();
+                keys.sort();
+                let mut indent2 = indent.to_string();
+                indent2.push(' ');
+                for key in keys {
+                    result.push_str(indent);
+                    result.push_str(&format!("{:?}", key));
+                    let subtree = self.map.get(key).unwrap();
+                    if subtree.payload.len() > 0 {
+                        result.push_str(&format!(" -> {}", subtree.payload.len()));
+                    }
+                    result.push('\n');
+                    self.map.get(key).unwrap().dump_to(result, &indent2);
+                }
+            } else {
+                break;
+            }
+        }
     }
 
     fn follow_mut(&mut self, step: &MatcherStep) -> &mut TreeMatcher {
@@ -195,9 +238,11 @@ impl TreeMatcher {
     /// TODO: handle renaming of quantified vars
     pub fn add_payload(&mut self, source: TreeMatcherSource, intros: &[HIntro], stmt: &HExpr) -> Result<(),GuessError> {
         let mut vars = intros_to_set(stmt.pos, intros)?;
+        let mut var_count = 0;
         let mut buffer = VecDeque::new();
         buffer.push_back(stmt);
         let mut matcher = self;
+        trace!("Adding to TreeMatcher: {:?}, intros {:?}, stmt {:?}", source, intros, stmt);
         loop {
             if let Some(e) = buffer.pop_front() {
                 let mut step = MatcherStep::Exact(e.name.clone(), e.args.len());
@@ -207,7 +252,8 @@ impl TreeMatcher {
                             step = MatcherStep::Retrieve(*n);
                         } else {
                             step = MatcherStep::Push;
-                            vars.insert(x.clone(), Some(vars.len()));
+                            vars.insert(x.clone(), Some(var_count));
+                            var_count += 1;
                         }
                     }
                 }

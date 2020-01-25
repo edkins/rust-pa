@@ -223,3 +223,17 @@ impl HRule {
     }
 }
 
+impl HExpr {
+    /// Not using == because it's not an exact match. The pos may be different.
+    pub fn eq(&self, other: &HExpr) -> bool {
+        if self.name != other.name || self.typ != other.typ || self.args.len() != other.args.len() {
+            return false;
+        }
+        for (i,arg) in self.args.iter().enumerate() {
+            if !arg.eq(&other.args[i]) {
+                return false;
+            }
+        }
+        return true;
+    }
+}
