@@ -1,5 +1,5 @@
 use num_traits::Zero;
-use crate::high_level::ast::{HBuiltin,HType,HName,HStepType,HAxiom,HExpr,HRule};
+use crate::high_level::ast::{HBuiltin,HType,HName,HStepType,HAxiom,HExpr,HRule,HStep,HVarName};
 
 #[derive(Clone,Debug)]
 pub struct FuncType {
@@ -236,4 +236,28 @@ impl HExpr {
         }
         return true;
     }
+
+    /// This includes variables bound by quantifiers. It doesn't just test for free variables.
+    pub fn contains_var_anywhere(&self, var: &HVarName) -> bool {
+        if let HName::UserVar(x) = &self.name {
+            if x == var {
+                return true;
+            }
+        }
+        self.args.iter().any(|arg|arg.contains_var_anywhere(var))
+    }
 }
+
+pub fn step_id_ubound(steps: &[HStep]) -> usize {
+    let mut result = 0;
+    for step in steps {
+        if let Some(step_id) = step.id {
+            result = result.max(step_id + 1);
+        }
+        if let Some(contents) = &step.contents {
+            result = result.max(step_id_ubound(contents));
+        }
+    }
+    result
+}
+

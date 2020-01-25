@@ -1,6 +1,6 @@
 use std::collections::{HashMap,HashSet};
 use crate::high_level::ast::*;
-use crate::high_level::semantics::FuncType;
+use crate::high_level::semantics::{step_id_ubound,FuncType};
 
 #[derive(Debug)]
 pub struct TypeError {
@@ -87,6 +87,7 @@ impl VarMap {
 struct Defs {
     functions: HashMap<HFuncName,FuncType>,
     lemmas: HashSet<HLemmaName>,
+    next_step_id: HStepId,
 }
 
 impl Default for Defs {
@@ -94,6 +95,7 @@ impl Default for Defs {
         Defs {
             functions: HashMap::<HFuncName,FuncType>::new(),
             lemmas: HashSet::new(),
+            next_step_id: 0,
         }
     }
 }
@@ -256,6 +258,8 @@ impl Defs {
     }
 
     fn lemma(&mut self, lemma: &mut HItemLemma) -> Result<(), TypeError> {
+        self.next_step_id = step_id_ubound(&lemma.proof);
+
         let pos = lemma.pos;
         if self.lemmas.contains(&lemma.name) {
             return ErrorCode::LemmaAlreadyDefined.at(pos);
@@ -280,6 +284,10 @@ impl Defs {
         }
 
         // Deal with id
+        if step.id.is_none() {
+            step.id = Some(self.next_step_id);
+            self.next_step_id += 1;
+        }
         if let Some(id) = step.id {
             if step_ids.contains(&id) {
                 return ErrorCode::IdAlreadyUsed.at(pos);

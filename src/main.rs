@@ -10,6 +10,7 @@ use crate::high_level::type_check::type_check;
 
 mod high_level;
 mod kernel;
+mod tactic;
 
 #[derive(Debug)]
 pub struct ProcessingError {

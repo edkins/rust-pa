@@ -1,7 +1,8 @@
-use log::trace;
+use log::{debug,trace};
 use std::collections::HashMap;
 use crate::high_level::ast::*;
 use crate::high_level::tree_matcher::{TreeMatcher,TreeMatcherSource,TreeMatcherAnswer};
+use crate::high_level::semantics::step_id_ubound;
 
 #[derive(Debug)]
 pub struct GuessError {
@@ -12,15 +13,16 @@ pub struct GuessError {
 #[derive(Debug)]
 pub enum ErrorCode {
     CannotCurrentlyMatchStmtIntros,
-    CouldNotGuess,
     ClaimHasNoStatement,
+    CouldNotGuess,
     MissingId,
     NoIntrosForBox,
+    SubstValueContainsBoundVar,
+    UnexpectedCouldNotPeelForall,
     UnexpectedLemmaNotFound,
     UnexpectedNoId,
-    UnexpectedCouldNotPeelForall,
-    UnexpectedPeeledWrongVar,
     UnexpectedNoValueToSubstitute,
+    UnexpectedPeeledWrongVar,
     UnexpectedMissingStatement,
     UnexpectedMissingId,
     UnexpectedStmtIntro,
@@ -46,6 +48,7 @@ impl Guesser {
     fn guess_for_step(&mut self, result: &mut Vec<HStep>, matcher: &TreeMatcher, step: &HStep, processed: &[HExpr]) -> Result<(),GuessError> {
         let pos = step.pos;
         if step.step_type.is_box() {
+            debug!("Guesswork for box {:?}", step.step_type);
             let mut p2 = processed.to_vec();
             for intro in step.intros.as_ref().unwrap_or(&vec![]) {
                 if let HIntro::Stmt(stmt,_) = intro {
@@ -64,6 +67,7 @@ impl Guesser {
                 justification: None,
             });
         } else if let Some(stmt) = &step.statement {
+            debug!("Guesswork for claim {}", stmt);
             let matches = matcher.match_expr(stmt);
             if matches.is_empty() {
                 return ErrorCode::CouldNotGuess.at(step.pos);
@@ -181,6 +185,18 @@ impl Guesser {
 }
 
 fn subst_var(expr: &HExpr, x: &HVarName, val: Option<&HExpr>) -> Result<HExpr, GuessError> {
+    if expr.name.is_quant() {
+        if expr.args.len() > 0 {
+            if let HName::UserVar(y) = &expr.args[0].name {
+                if let Some(e) = &val {
+                    if e.contains_var_anywhere(y) {
+                        return ErrorCode::SubstValueContainsBoundVar.at(expr.pos);
+                    }
+                }
+            }
+        }
+    }
+
     if let HName::UserVar(x2) = &expr.name {
         if x == x2 {
             if let Some(e) = val {
@@ -198,19 +214,6 @@ fn subst_var(expr: &HExpr, x: &HVarName, val: Option<&HExpr>) -> Result<HExpr, G
         name: expr.name.clone(),
         args
     })
-}
-
-fn step_id_ubound(steps: &[HStep]) -> usize {
-    let mut result = 0;
-    for step in steps {
-        if let Some(step_id) = step.id {
-            result = result.max(step_id + 1);
-        }
-        if let Some(contents) = &step.contents {
-            result = result.max(step_id_ubound(contents));
-        }
-    }
-    result
 }
 
 fn guess_for_lemma(matcher: &TreeMatcher, lemma: &mut HItemLemma, lemmas: &HashMap<HLemmaName,HExpr>) -> Result<(),GuessError> {
