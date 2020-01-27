@@ -9,6 +9,7 @@ use crate::high_level::translate::translate;
 use crate::high_level::type_check::type_check;
 
 mod binary;
+mod bkernel;
 mod high_level;
 mod kernel;
 mod tactic;

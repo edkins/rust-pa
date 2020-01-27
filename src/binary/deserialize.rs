@@ -1,4 +1,6 @@
-use crate::high_level::ast::*;
+use num_bigint::BigUint;
+use std::collections::HashMap;
+use crate::binary::codes::*;
 
 /// The binary format
 ///
@@ -24,280 +26,318 @@ use crate::high_level::ast::*;
 ///
 /// Expressions
 /// -----------
-/// Expressions have a length (in bytes). This length is assumed to be known ahead of time.
+/// Expressions are written in prefix notation. This was chosen over reverse Polish notation to
+/// allow easy depth-first traversal of expression trees. (Depth-first traversal is common in
+/// tactics, and it's assumed that lightweight tactics will use the same representation of
+/// expressions internally as they use for serialization).
 ///
-/// Expressions have a header and either zero, one or two arguments.
+/// Expressions therefore start with an opcode. Opcodes are either one of the standard ones listed
+/// below, or they are *introduced* before use. The introduction determines how many arguments they
+/// have, allowing unambiguous parsing of what follows.
 ///
-/// Two-arg expressions
-/// ===================
+/// Commands and the proof stack
+/// ----------------------------
+/// Expressions are prefixed with a command opcode, for example Claim. Certain commands manipulate
+/// the proof stack.
 ///
-/// Two-arg expressions are encoded starting with the length of the first (left) subexpression.
-/// This looks a bit like a VLQ, but is one bit short because the top bit indicates that it's this
-/// kind of expression. The second part of the header is another VLQ indicating the node type.
+/// The proof stack allows universally-quantified variables to enter scope, and hypotheses to be
+/// introduced. Things can be defined when the proof stack is nonempty, but when items are popped
+/// off the proof stack those definitions will acquire a "forall x" or "P ->" at the front.
 ///
-/// So a short two-arg expression would be encoded as follows:
+/// Opcodes and binary data
+/// -----------------------
+/// Opcodes are encoded as VLQ. Opcodes 2-8 take a second integer.
 ///
-/// 10xxxxxx 0nnnnnnn LLLLLLLL .... RRRRRRRR ....
-///
-/// where x gives the length (which must be nonzero), and n gives the node type.
-///
-/// A longer two-arg expression might be encoded as follows:
-///
-/// 11xxxxxx 1xxxxxxx 0xxxxxxx 1nnnnnnn 0nnnnnnn LLLLLLLLL ........ RRRRRRRR ......
-///
-/// Note that here, both the LHS-length and the node type are written in extended form, starting
-/// with a 1 bit.
-///
-/// Also note that a special node type exists to join together extra arguments for things that need
-/// three or more subexpressions.
-///
-/// If the LHS-length would exceed the expression length, it's invalid.
-///
-/// Zero- and one-arg expressions
-/// =============================
-///
-/// These are distinguished from two-sub expressions by the top bit being zero.
-///
-/// One and zero arg expressions are distinguished from each other by their length. That is, if
-/// there's room for an argument, then there's an argument.
-///
-/// Zero-arg expressions are written like this:
-///
-/// 00xxxxxx
-/// 01xxxxxx 0xxxxxxx
-/// 01xxxxxx 1xxxxxxx 0xxxxxxx
-///
-/// One-arg expressions are written like this:
-///
-/// 00xxxxxx LLLLLLLL ....
-/// 01xxxxxx 0xxxxxxx LLLLLLLL ....
-/// 01xxxxxx 1xxxxxxx 0xxxxxxx LLLLLLLL ....
-///
-/// Raw binary data
-/// ===============
-///
-/// The byte 10000000 leads raw binary data. This does not conflict with the two-arg expression
-/// encoding because the LHS expression length must be nonzero. The length of the expression is
-/// used to determine the length of the binary data.
-///
-/// Binary strings that are different lengths but otherwise the same (with leading or trailing
-/// zeros) are considered nonequal. Hence, binary data is considered different from unsigned
-/// integers (unless there's additional interpretation).
-///
-/// File structure
-/// --------------
-/// The file starts with the magic number "rsPA" (0x72735041 in big-endian). It then consists of a
-/// version number, the 32-bit big-endian encoded value 1. It then contains an expression, which
-/// must be of type Script. Then it ends with the magic number again.
-///
-/// So a valid file would be:
-///
-/// 0x72 0x73 0x50 0x41
-/// 0x01 0x00 0x00 0x00
-/// ...
-/// 0x72 0x73 0x50 0x41
-///
-/// Namespaces
-/// ----------
-/// The above spec allows one to interpret the structure of a binary blob, but not its
-/// interpretation. That is, the "node types" must be mapped to some semantics. This is the job of
-/// namespaces.
-///
-/// There are actually four namespaces:
-/// - The zero-arg namespace
-/// - The one-arg namespace
-/// - The two-arg namespace
-/// - The raw binary namespace
-///
-/// | Namespace | Indexed by      |Builtins?| Constants? |Bindables?|Interp fn?  |
-/// |-----------|-----------------|---------|------------|----------|------------|
-/// | Zero-arg  | natural numbers | Yes     | Yes        | Yes      |Sub-range   |
-/// | One-arg   | natural numbers | Yes     | Yes        | HOL only |No          |
-/// | Two-arg   | natural numbers | Yes     | Yes        | HOL only |No          |
-/// | Byte vec  | byte vectors    | No      | No         | No       |Entire range|
-///
-/// You can think of each namespace as a partial function from (natural numbers or byte vectors) to
-/// "things". If there's a gap in the partial function then the module is invalid.
-///
-/// But this partial function is built up of sub-functions, which either map a single item or a
-/// range of items to a particular interpretation.
-///
-/// In the case of builtins and constants, they are mapped one at a time to a particular
-/// interpretation. In the case of bindables, a range of them is assigned to be "bindable" but they
-/// are then bound individually. In the case of an interpretation function, a function is specified
-/// which maps a range to an output range. (For byte vecs, this must be the entire range).
-///
-/// Types
-/// -----
-/// Every expression has a type, which can be calculated easily. Advanced type systems are not
-/// handled here, and must be handled as an additional layer.
-///
-/// Each namespace entry specifies the type exactly, with the exception of:
-/// - error, which is transparent in its type (any module can wrap any part of an expression in an
-/// error node to indicate there was a problem with it)
-/// - comma, which is used to provide extra arguments to three-or-more-argument functions. The
-/// function itself determines the relevant types.
-///
-/// The builtin namespace
-/// ---------------------
-/// The builtin namespaces occupy a contiguous region. The more "useful" ones are given one-byte
-/// opcodes, and the less commonly used ones are given two-byte codes. This allows more of the
-/// one-byte space to be occupied by user-defined stuff, without conflict.
-///
-/// Zero-args:
-///
-/// |Code|Name           |Type     |
-/// |----|---------------|---------|
-/// |64  |False          |Bool     |
-/// |65  |True           |Bool     |
-/// |66  |Bool           |Type     |
-/// |67  |Nat            |Type     |
-/// |66  |Empty_addendum |Addendum |
-///
-/// One-arg:
-/// |Code|Name          |Type     |Arg type |
-/// |----|--------------|---------|---------|
-/// |62  |Not           |Bool     |Bool     |
-/// |63  |S             |Nat      |Nat      |
-/// |64  |PA (2-byte)   |Script   |Addendum |
-/// |65  |Pop           |Addendum |Addendum |
-///
-/// Two-args:
-///
-/// |Code|Name          |Type     |LHS type |RHS type           |
-/// |----|--------------|---------|---------|-------------------|
-/// |54  |And           |Bool     |Bool     |Bool               |
-/// |55  |Or            |Bool     |Bool     |Bool               |
-/// |56  |Imp           |Bool     |Bool     |Bool               |
-/// |57  |Iff           |Bool     |Bool     |Bool               |
-/// |58  |Eq_nat        |Bool     |Nat      |Nat                |
-/// |59  |Add           |Nat      |Nat      |Nat                |
-/// |60  |Mul           |Nat      |Nat      |Nat                |
-/// |61  |All           |Bool     |var.Nat  |Bool               |
-/// |62  |Exists        |Bool     |var.Nat  |Bool               |
-/// |63  |Comma         |<T,U>    |<T>      |<U>                |
-/// |64  |Error         |<T>      |utf-8    |<T>                |
-/// |65  |Functype (->) |Type     |Type     |Type               |
-/// |66  |Product       |Type     |Type     |Type               |
-/// |68  |With_intro    |Addendum |lit.Nat  |utf-8,Type,Addendum|
-/// |69  |With_var      |Addendum |lit.Nat  |utf-8,Type,Addendum|
-/// |70  |With_axiom    |Addendum |lit.Nat  |Bool,Addendum      |
-/// |71  |With_def      |Addendum |lit.Nat  |Bool,Addendum      |
-/// |72  |With_lemma    |Addendum |lit.Nat  |Bool,Addendum      |
-/// |73  |With_builtin  |Addendum |lit.Nat  |Nat,Nat,Addendum   |
-/// |74  |With_smallnat |Addendum |lit.Nat  |Nat,Nat,Addendum   |
-/// |75  |With_bignat   |Addendum |lit.Nat  |Nat,Addendum       |
-/// |76  |Push_var      |Addendum |lit.Nat  |Addendum           |
-/// |77  |Push_hyp      |Addendum |Bool     |Addendum           |
-///
-/// It might seem to make more sense to have operators that append something to a script, rather
-/// than prepending it, since a valid script consists of a shorter valid script with stuff
-/// appended. The reason for doing it this way was to allow streaming: the start of a file can be
-/// processed, and partial output generated, without knowing how the file will end.
-///
-/// Let's try again
-/// ---------------
-///
-/// One-byte expressions:
-///
-/// |Bits       |Args|Header|
-/// |-----------|----|------|
-/// |xxxxxxxx   |0   |1 byte|
-///
-/// Two-byte expressions:
-///
-/// |Bits               |Args|Header |
-/// |-------------------|----|-------|
-/// |0xxxxxxx yyyyyyyy  |1   |1 byte |
-/// |1xxxxxxx xxxxxxxx  |0   |2 bytes|
-///
-/// Three-byte expressions:
-///
-/// |Bits                       |Args|Header |
-/// |---------------------------|----|-------|
-/// |00xxxxxx yyyyyyyy zzzzzzzz |2   |1 byte |
-/// |01xxxxxx yyyyyyyy yyyyyyyy |1   |1 byte |
-/// |1xxxxxxx 0xxxxxxx yyyyyyyy |1   |2 bytes|
-/// |1xxxxxxx 1xxxxxxx xxxxxxxx |0   |3 bytes|
-///
-/// Four-byte expressions:
-///
-/// |Bits                               |Args|Header |
-/// |-----------------------------------|----|-------|
-/// |000xxxxx yyyyyyyy zzzzzzzz zzzzzzzz|2   |1 byte |
-/// |001xxxxx yyyyyyyy yyyyyyyy zzzzzzzz|2   |1 byte |
-/// |010xxxxx yyyyyyyy yyyyyyyy yyyyyyyy|1   |1 byte |
-/// |1xxxxxxx 00xxxxxx yyyyyyyy zzzzzzzz|2   |2 bytes|
-/// |1xxxxxxx 01xxxxxx yyyyyyyy yyyyyyyy|1   |2 bytes|
-/// |1xxxxxxx 1xxxxxxx 0xxxxxxx yyyyyyyy|1   |3 bytes|
-/// |1xxxxxxx 1xxxxxxx 1xxxxxxx 0xxxxxxx|0   |4 bytes|
-///
-/// That's nice, but let's try again
-/// --------------------------------
-/// There are two stacks: the expression stack and the proof stack.
-///
-/// The expression stack allows expressions to be written in reverse-Polish notation: depending on
-/// their type, opcodes will pop some number of values off the stack and push a single value.
-///
-/// The proof stack is separate and may only be manipulated when the expression stack is empty. It
-/// allows universally-quantified variables to enter scope, and hypotheses to be introduced. Things
-/// can be defined when the proof stack is nonempty, but when items are popped off the proof stack
-/// those definitions will acquire a "forall x" or "P ->" at the front.
-///
-/// Opcodes are encoded as VLQ. Opcodes 1, 2 and 3 take a second integer.
-///
-/// Binary data can be encoded, with an 0x80 byte followed by VLQ-encoded length, followed by the
+/// Binary data can be encoded, with an 0x01 byte followed by VLQ-encoded length, followed by the
 /// binary data itself.
+///
+/// Definitions
+/// -----------
+/// Definitions are surprisingly complex, because we want to allow for "underdefined" symbols, that
+/// obey certain rules but whose exact value in all circumstances is not known.
+///
+/// There are two main use cases for underdefined symbols:
+/// - partial functions (where e.g. the division by zero case is undefined)
+/// - type abstraction, where we want to leave equality undefined between objects of different
+/// conceptual types
+///
+/// A concrete definition must be supplied in all cases though, to prove that we're not introducing
+/// contradictory requirements.
+///
+/// Definitions have the following structure:
+///
+/// ```text
+/// startd
+///
+/// var x              # push a var corresponding to each arg of the function we're defining
+/// def.f "f" mul x x  # The implementation of f(x); this will be hidden later
+/// claim lt x f x x   # We can assert miscellaneous facts about f; these will also be hidden
+/// popvar
+///
+/// export eq f 2 4    # This is all people end up seeing - that f maps 2 to 4
+///
+/// endd
+/// ```
 ///
 /// Some opcodes
 /// ============
 ///
-/// |Opcode| Name |Operation                                                 |
-/// |------|------|----------------------------------------------------------|
-/// |0     |NULL  |Invalid opcode. Immediately abort processing.             |
-/// |1;n   |Error |Error, with error code.                                   |
-/// |2;n   |intro |Pop a utf-8 and a type off the expr stack. Introduce the next thing as that name/type. Cannot redefine control codes|
-/// |3;n   |n     |Big unsigned int                                          |
-/// |4;n   |hintcl|Go back n claims and use this as a hint for the next claim|
-/// |5;n   |hint  |Hint that we're using logic rule n, defined in a separate table|
-/// |10    |var   |Pop the final variable off the expr stack. Push it to proof stack|
-/// |11    |popvar|Pop a var off the proof stack. Expr stack must be empty  |
-/// |12    |hyp   |Pop a bool off the expr stack. Push it to proof stack    |
-/// |13    |pophyp|Pop a hyp off the proof stack. Expr stack must be empty  |
-/// |14    |claim |Pop the final bool off the expr stack. Fail if not provable|
-/// |15    |def   |Pop the final bool off the expr stack and define it to be true. May fail|
-/// |16    |adv   |Pop a nat off the expr stack, and advance that many bytes in the source file|
-/// |17    |all   |Pop a bool and a variable off the expr stack. Push a bool |
-/// |18    |exists|Pop a bool and a variable off the expr stack. Push a bool |
-/// |55    |not   |bool->bool                                                |
-/// |56    |S     |nat->nat                                                  |
-/// |57    |and   |(bool,bool) -> bool                                       |
-/// |58    |or    |(bool,bool) -> bool                                       |
-/// |59    |imp   |(bool,bool) -> bool                                       |
-/// |60    |iff   |(bool,bool) -> bool                                       |
-/// |61    |eq    |(nat,nat) -> bool                                         |
-/// |62    |add   |(nat,nat) -> nat                                          |
-/// |63    |mul   |(nat,nat) -> nat                                          |
-/// |64-127|0-64  |Small unsigned ints, until overridden with intro.         |
-/// |0x80;n|binary|n indicates length. Push a vector of bytes.               |
-/// |128   |End   |Ends the script. Both stacks must be empty.               |
-/// |129   |EndErr|Ends the script and states that errors occurred.          |
-/// |130   |false |Push false                                                |
-/// |131   |true  |Push true                                                 |
-/// |132   |Bool  |Push the type "bool"                                      |
-/// |133   |Nat   |Push the type "nat"                                       |
-/// |134   |Prod  |(type,type) -> type                                       |
-/// |135   |Func  |(type,type) -> type                                       |
-pub fn deserialize(data: &[u8]) -> HScript {
+/// |Opcode| Name |Args|Operation                                                 |
+/// |------|------|----|----------------------------------------------------------|
+/// |0     |NULL  |0   |Invalid opcode. Immediately abort processing              |
+/// |1;n;xx|binary|0   |Push two nats: the length, and the big-endian data        |
+/// |2;n   |error |0   |Error, with error code                                    |
+/// |3;n   |intro |2   |Introduce the n thing as the given name/type              |
+/// |4;n   |def   |2   |Introduce the n thing as the given name/value             |
+/// |5;n   |n     |0   |Big unsigned int                                          |
+/// |6;n   |hintcl|0   |Go back n claims and use this as a hint for the next claim|
+/// |7;n   |hint  |0   |Hint that we're using logic rule n, defined in a separate table|
+/// |8;n   |adv   |0   |Advance n bytes in the source file                        |
+/// |9     |var   |1   |Push a variable to the proof stack                        |
+/// |10    |popvar|0   |Pop a var off the proof stack                             |
+/// |11    |hyp   |1   |Push a hypothesis to the proof stack                      |
+/// |12    |pophyp|0   |Pop a hypothesis off the proof stack                      |
+/// |13    |claim |1   |Try to prove the given boolean expression                 |
+/// |14    |all   |2   |(var,bool) -> bool                                        |
+/// |15    |exists|2   |(var,bool) -> bool                                        |
+/// |16    |not   |1   |bool->bool                                                |
+/// |17    |and   |2   |(bool,bool) -> bool                                       |
+/// |18    |or    |2   |(bool,bool) -> bool                                       |
+/// |19    |imp   |2   |(bool,bool) -> bool                                       |
+/// |20    |iff   |2   |(bool,bool) -> bool                                       |
+/// |21    |eq    |2   |(nat,nat) -> bool                                         |
+/// |22-95 |      |    |Space for user-defined opcodes                            |
+/// |96-127|0-31  |0   |Small unsigned int                                        |
+/// |128   |end   |0   |End the script. Proof stack must be empty                 |
+/// |129   |enderr|0   |End the script while indicating that errors occurred      |
+/// |130   |fatal |0   |End the script early, indicating that processing could not continue|
+/// |131   |startd|0   |Start a definition section, which hides everything that isn't exported|
+/// |132   |endd  |0   |End a definition section                                  |
+/// |133   |export|1   |Prove a bool and export it from the definition section    |
+/// |134   |false |0   |The value "false"                                         |
+/// |135   |true  |0   |The value "true"                                          |
+/// |136   |bool  |0   |The type "bool"                                           |
+/// |137   |nat   |0   |The type "nat"                                            |
+/// |138   |prod  |2   |(type,type) -> type                                       |
+/// |139   |func  |2   |(type,type) -> type                                       |
+/// |140   |S     |1   |nat->nat                                                  |
+/// |141   |add   |2   |(nat,nat) -> nat                                          |
+/// |142   |mul   |2   |(nat,nat) -> nat                                          |
+/// |143-255|(reserved)||Reserved. Abort if encountered.                          |
+/// |256+  |      |    |Space for user-defined opcodes                            |
+pub struct Interaction {
+    input: Vec<u8>,
+    output: Vec<u8>,
+    opcode_args: HashMap<usize,usize>,
+    pos: IPos,
+}
+
+impl Interaction {
+    pub fn new(input: Vec<u8>) -> Self {
+        Interaction {
+            input,
+            output: vec![],
+            opcode_args: defaults(),
+            pos: IPos { index: 0, remaining_expressions: 0, source_pos: 0 },
+        }
+    }
+    pub fn read_element(&mut self) -> Result<Element,DecodingError> {
+        let first = self.read_byte()?;
+        if first == 0x80 {
+            // binary vector
+            let len = self.read_vlq()?;
+            let vec = self.read_vec(len)?;
+            Ok(Element::Bin(vec))
+        } else {
+        }
+    }
+
+    fn read_vec(&mut self, len:usize) -> Result<Vec<u8>,DecodingError> {
+        let mut index2 = self.pos.index.checked_add(len).ok_or_else(||ErrorCode::InternalOverflow.at(self.pos))?;
+        if index2 > self.input.len() {
+            self.pos.index = self.input.len();
+            return ErrorCode::UnexpectedEOF.at(self.pos);
+        }
+        let result = self.input[self.pos.index..index2].to_vec();
+        self.pos.index = index2;
+        Ok(result)
+    }
+
+    fn read_byte(&mut self) -> Result<u8,DecodingError> {
+        if self.pos.index >= self.input.len() {
+            return ErrorCode::UnexpectedEOF.at(self.pos);
+        }
+        let result = self.input[self.pos.index];
+        self.pos.index += 1;
+        Ok(result)
+    }
+
+    fn read_vlq(&mut self) -> Result<usize,DecodingError> {
+        let next = self.read_byte()?;
+        self.read_rest_of_vlq(next)
+    }
+
+    fn read_rest_of_vlq(&mut self, mut next: u8) -> Result<usize,DecodingError> {
+        let mut result = 0;
+        if next == 0x80 {
+            return ErrorCode::InvalidVLQ.at(self.pos);
+        }
+        loop {
+            result |= (next & 0x7f) as usize;
+            if (next & 0x80) == 0 {
+                break;
+            }
+            next = self.read_byte()?;
+            result = result.checked_shl(7).ok_or_else(||ErrorCode.err(self.pos))?;
+        }
+        Ok(result)
+    }
+}
+
+fn defaults() -> HashMap<usize,usize> {
+    let mut result:HashMap<usize,usize> = HashMap::new();
+    for (k,v) in [
+        (ERROR,0),
+        (INTRO,2),
+        (DEF,2),
+        (BIGINT,0),
+        (HINTCL,0),
+        (HINT,0),
+        (ADV,0),
+        (VAR,1),
+        (POPVAR,0),
+        (HYP,0),
+        (POPHYP,0),
+        (CLAIM,1),
+        (ALL,2),
+        (EXISTS,2),
+        (NOT,1),
+        (AND,2),
+        (OR,2),
+        (IMP,2),
+        (IFF,2),
+        (EQ,2),
+        (END,0),
+        (ENDERR,0),
+        (FATAL,0),
+        (STARTDEF,0),
+        (ENDDEF,0),
+        (EXPORT,1),
+        (FALSE,0),
+        (TRUE,0),
+        (BOOL,0),
+        (NAT,0),
+        (PRODUCT,2),
+        (FUNC,2),
+        (SUCC,1),
+        (ADD,2),
+        (MUL,2),
+    ].iter() {
+        result.insert(*k,*v);
+    }
+    for i in UINT_MIN..=UINT_MAX {
+        result.insert(i,0);
+    }
+    result
+}
+
+pub fn opcode_takes_extra(opcode: usize) -> bool {
+    match opcode {
+        INTRO | DEF | BIGINT | HINTCL | HINT | ADV => true,
+        _ => false
+    }
+}
+
+pub fn opcode_is_expr(opcode: usize) -> bool {
+    match opcode {
+        BIGINT | EXPR_MIN..=EXPR_MAX | BIGEXPR_MIN.. => true,
+        _ => false
+    }
+}
+
+pub fn opcode_is_user(opcode: usize) -> bool {
+    match opcode {
+        USER_MIN..=USER_MAX | BIGUSER_MIN.. => true,
+        _ => false
+    }
+}
+
+pub fn opcode_is_quant(opcode: usize) -> bool {
+    match opcode {
+        ALL | EXISTS => true,
+    }
+}
+
+struct OpcodeInfo {
+}
+
+type SPos = usize;
+
+#[derive(Clone,Copy)]
+struct IPos {
+    source_pos: SPos,
+    index: usize,
+    //remaining_expressions: usize,
+}
+
+impl IPos {
+    pub fn beginning() -> Self {
+        IPos {
+            source_pos: 0,
+            index: 0
+        }
+    }
+
+    pub fn backtrack(self, input: &[u8]) -> IPos {
+        IPos {
+            source_pos: self.source_pos,
+            index: self.index - input.len(),
+        }
+    }
+
+    pub fn advance(self, input: &[u8]) -> IPos {
+        IPos {
+            source_pos: self.source_pos,
+            index: self.index + input.len(),
+        }
+    }
+
+    pub fn advance_source(self, amount: usize) -> IPos {
+        IPos {
+            source_pos: self.source_pos + amount,
+            index: self.index,
+        }
+    }
+}
+
+pub enum Element {
+    Op(usize,usize),
+    Extra(usize,usize,usize),
+    Num(BigUint),
+    Bin(Vec<u8>),
 }
 
 pub struct DecodingError {
     pub bpos: usize,
-    pub pos: HPos,
+    pub pos: SPos,
     pub code: ErrorCode
 }
 
 pub enum ErrorCode {
+    InternalOverflow,
     InvalidVLQ,
-    LHSTooLong,
+    MoreElementsToCome,
+    NotACommand,
+    NotAtAnExpression,
+    OpcodeAlreadyUsed,
+    StillExpressionsFromPreviousCommand,
+    UnexpectedEndOfExpression,
+    UnexpectedEOF,
+    UnknownOpcode,
+}
+
+impl ErrorCode {
+    fn at<T>(pos: IPos) -> Result<T,DecodingError> {
+        Err(DecodingError{bpos: pos.index, pos: pos.source_pos, code: self})
+    }
 }
